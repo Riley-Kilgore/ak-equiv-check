@@ -1,0 +1,13 @@
+https://github.com/aiken-lang/aiken
+https://github.com/aiken-lang/stdlib
+https://github.com/aiken-lang/fuzz
+https://github.com/aiken-lang/sample
+https://github.com/ariady-putra-emurgo/aiken_primitive_types
+https://github.com/ariady-putra-emurgo/aiken_custom_types
+https://github.com/ariady-putra-emurgo/aiken_const_showcase
+https://github.com/ariady-putra-emurgo/aiken_fn_showcase
+https://github.com/ariady-putra-emurgo/aiken_control_answer
+https://github.com/ariady-putra-emurgo/aiken_minting_answer
+https://github.com/ariady-putra-emurgo/aiken_spending_validator
+https://github.com/ariady-putra-emurgo/aiken_staking_validator
+https://github.com/ariady-putra-emurgo/aiken_check_showcase

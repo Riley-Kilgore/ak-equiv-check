@@ -1,0 +1,802 @@
+{
+  "generated_at": "2026-08-13",
+  "baseline": "v1.1.23",
+  "status": "mapping-complete-execution-unverified",
+  "scope": {
+    "tagged_ast_and_compiler_surfaces": [
+      "ModuleKind",
+      "Definition",
+      "DecoratorKind",
+      "Purpose",
+      "Annotation",
+      "BinOp",
+      "UnOp",
+      "LogicalOpChainKind",
+      "Pattern",
+      "Namespace",
+      "AssignmentKind",
+      "TraceKind",
+      "Tracing",
+      "TraceLevel",
+      "OnTestFailure",
+      "ArgBy",
+      "ArgName",
+      "FnStyle",
+      "TypedExpr",
+      "UntypedExpr",
+      "ByteArrayFormatPreference",
+      "Base",
+      "Bls12_381PointType",
+      "SimpleExpr",
+      "PlutusProjectTarget",
+      "PreludeType"
+    ],
+    "mapped_surface_variant_count": 160,
+    "mapped_keyword_or_alias_count": 24,
+    "active_uplc_builtin_count": 87
+  },
+  "rule": "A release is blocked when a tagged surface variant, keyword, accepted project form, prelude type, or active builtin has no feature row.",
+  "surface_maps": {
+    "ModuleKind": {
+      "Lib": [
+        "MOD-LIB"
+      ],
+      "Validator": [
+        "MOD-VALIDATOR"
+      ],
+      "Env": [
+        "MOD-ENV"
+      ],
+      "Config": [
+        "MOD-CONFIG"
+      ]
+    },
+    "Definition": {
+      "Fn": [
+        "DEF-FN-PRIVATE",
+        "DEF-FN-PUBLIC",
+        "FN-EMPTY-BODY-TODO"
+      ],
+      "TypeAlias": [
+        "DEF-TYPE-ALIAS-PRIVATE",
+        "DEF-TYPE-ALIAS-PUBLIC",
+        "DEF-TYPE-ALIAS-GENERIC"
+      ],
+      "DataType": [
+        "DEF-TYPE-PRIVATE",
+        "DEF-TYPE-PUBLIC",
+        "DEF-TYPE-OPAQUE-PRIVATE",
+        "DEF-TYPE-OPAQUE-PUBLIC"
+      ],
+      "Use": [
+        "IMPORT-QUALIFIED",
+        "IMPORT-UNQUALIFIED"
+      ],
+      "ModuleConstant": [
+        "DEF-CONST-PRIVATE",
+        "DEF-CONST-PUBLIC"
+      ],
+      "Test": [
+        "DEF-TEST"
+      ],
+      "Benchmark": [
+        "DEF-BENCH"
+      ],
+      "Validator": [
+        "DEF-VALIDATOR"
+      ]
+    },
+    "DecoratorKind": {
+      "Tag": [
+        "ENC-TAG-TYPE-DECIMAL",
+        "ENC-TAG-TYPE-HEX",
+        "ENC-TAG-CONSTRUCTOR-DECIMAL",
+        "ENC-TAG-CONSTRUCTOR-HEX"
+      ],
+      "List": [
+        "ENC-LIST"
+      ]
+    },
+    "Purpose": {
+      "Spend": [
+        "VAL-SPEND"
+      ],
+      "Mint": [
+        "VAL-MINT"
+      ],
+      "Withdraw": [
+        "VAL-WITHDRAW"
+      ],
+      "Publish": [
+        "VAL-PUBLISH"
+      ],
+      "Propose": [
+        "VAL-PROPOSE"
+      ],
+      "Vote": [
+        "VAL-VOTE"
+      ]
+    },
+    "Annotation": {
+      "Constructor": [
+        "ANN-CONSTRUCTOR",
+        "ANN-MODULE-QUALIFIED"
+      ],
+      "Fn": [
+        "ANN-FUNCTION"
+      ],
+      "Var": [
+        "ANN-VARIABLE"
+      ],
+      "Hole": [
+        "ANN-HOLE",
+        "ANN-HOLE-NAMED"
+      ],
+      "Tuple": [
+        "ANN-TUPLE"
+      ],
+      "Pair": [
+        "ANN-PAIR",
+        "ANN-PAIR-QUALIFIED"
+      ]
+    },
+    "BinOp": {
+      "And": [
+        "OP-AND"
+      ],
+      "Or": [
+        "OP-OR"
+      ],
+      "Eq": [
+        "OP-EQ",
+        "OP-EQ-SERIALIZABLE"
+      ],
+      "NotEq": [
+        "OP-NEQ",
+        "OP-NEQ-SERIALIZABLE"
+      ],
+      "LtInt": [
+        "OP-LT"
+      ],
+      "LtEqInt": [
+        "OP-LTE"
+      ],
+      "GtEqInt": [
+        "OP-GTE"
+      ],
+      "GtInt": [
+        "OP-GT"
+      ],
+      "AddInt": [
+        "OP-ADD"
+      ],
+      "SubInt": [
+        "OP-SUB"
+      ],
+      "MultInt": [
+        "OP-MUL"
+      ],
+      "DivInt": [
+        "OP-DIV"
+      ],
+      "ModInt": [
+        "OP-MOD"
+      ]
+    },
+    "UnOp": {
+      "Not": [
+        "OP-NOT"
+      ],
+      "Negate": [
+        "OP-NEGATE"
+      ]
+    },
+    "LogicalOpChainKind": {
+      "And": [
+        "BOOL-AND-BLOCK"
+      ],
+      "Or": [
+        "BOOL-OR-BLOCK"
+      ]
+    },
+    "Pattern": {
+      "Int": [
+        "PAT-INT-DECIMAL",
+        "PAT-INT-SEPARATOR",
+        "PAT-INT-HEX",
+        "PAT-INT-NEGATIVE"
+      ],
+      "ByteArray": [
+        "PAT-BYTEARRAY-LIST-DECIMAL",
+        "PAT-BYTEARRAY-LIST-HEX",
+        "PAT-BYTEARRAY-UTF8",
+        "PAT-BYTEARRAY-HEX"
+      ],
+      "Var": [
+        "PAT-VARIABLE"
+      ],
+      "Assign": [
+        "PAT-AS"
+      ],
+      "Discard": [
+        "PAT-DISCARD",
+        "PAT-NAMED-DISCARD"
+      ],
+      "List": [
+        "PAT-LIST-EXACT",
+        "PAT-LIST-TAIL",
+        "PAT-LIST-NAMED-TAIL"
+      ],
+      "Constructor": [
+        "PAT-BOOL",
+        "PAT-CONSTRUCTOR-POSITIONAL",
+        "PAT-CONSTRUCTOR-RECORD",
+        "PAT-CONSTRUCTOR-POSITIONAL-SPREAD",
+        "PAT-RECORD-SPREAD"
+      ],
+      "Pair": [
+        "PAT-PAIR"
+      ],
+      "Tuple": [
+        "PAT-TUPLE"
+      ]
+    },
+    "Namespace": {
+      "Module": [
+        "PAT-MODULE-QUALIFIED"
+      ],
+      "Type": [
+        "PAT-TYPE-QUALIFIED",
+        "SELECT-TYPE-NAMESPACE"
+      ]
+    },
+    "AssignmentKind": {
+      "Is": [
+        "IF-IS-PATTERN-TYPE",
+        "IF-IS-TYPE"
+      ],
+      "Let": [
+        "LET-VARIABLE",
+        "LET-DESTRUCTURE",
+        "LET-BACKPASS"
+      ],
+      "Expect": [
+        "EXPECT-PATTERN",
+        "EXPECT-BOOLEAN",
+        "EXPECT-BACKPASS"
+      ]
+    },
+    "TraceKind": {
+      "Trace": [
+        "TRACE-BASIC",
+        "TRACE-QUESTION"
+      ],
+      "Todo": [
+        "TODO-BARE",
+        "TODO-REASON",
+        "FN-EMPTY-BODY-TODO",
+        "VAL-EMPTY-HANDLER-TODO"
+      ],
+      "Error": [
+        "FAIL-BARE",
+        "FAIL-REASON",
+        "ERROR-ALIAS"
+      ]
+    },
+    "Tracing": {
+      "UserDefined": [
+        "TRACE-SOURCE-USER"
+      ],
+      "CompilerGenerated": [
+        "TRACE-SOURCE-COMPILER"
+      ],
+      "All": [
+        "TRACE-SOURCE-ALL"
+      ]
+    },
+    "TraceLevel": {
+      "Silent": [
+        "TRACE-LEVEL-SILENT"
+      ],
+      "Compact": [
+        "TRACE-LEVEL-COMPACT"
+      ],
+      "Verbose": [
+        "TRACE-LEVEL-VERBOSE"
+      ]
+    },
+    "OnTestFailure": {
+      "FailImmediately": [
+        "TEST-UNIT",
+        "TEST-PROPERTY-VIA"
+      ],
+      "SucceedImmediately": [
+        "TEST-FAIL"
+      ],
+      "SucceedEventually": [
+        "TEST-FAIL-ONCE"
+      ]
+    },
+    "ArgBy": {
+      "ByName": [
+        "FN-ARG-NAMED",
+        "FN-ARG-DISCARD",
+        "FN-ARG-LABEL",
+        "FN-ARG-LABEL-OVERRIDE",
+        "FN-ARG-LABELLED-DISCARD"
+      ],
+      "ByPattern": [
+        "FN-ARG-DESTRUCTURE",
+        "FN-ARG-DESTRUCTURE-ANNOTATED"
+      ]
+    },
+    "ArgName": {
+      "Named": [
+        "FN-ARG-NAMED",
+        "FN-ARG-LABEL",
+        "FN-ARG-LABEL-OVERRIDE"
+      ],
+      "Discarded": [
+        "FN-ARG-DISCARD",
+        "FN-ARG-LABELLED-DISCARD"
+      ]
+    },
+    "FnStyle": {
+      "Plain": [
+        "FN-ANONYMOUS"
+      ],
+      "Capture": [
+        "CAPTURE-FUNCTION",
+        "CAPTURE-CONSTRUCTOR"
+      ],
+      "BinOp": [
+        "FN-ANON-BINOP"
+      ]
+    },
+    "TypedExpr": {
+      "UInt": [
+        "LIT-INT-DECIMAL",
+        "LIT-INT-SEPARATOR",
+        "LIT-INT-HEX"
+      ],
+      "String": [
+        "LIT-STRING",
+        "LIT-STRING-MULTILINE",
+        "LIT-STRING-UNICODE",
+        "LIT-STRING-ESCAPE"
+      ],
+      "ByteArray": [
+        "LIT-BYTEARRAY-LIST-DECIMAL",
+        "LIT-BYTEARRAY-LIST-HEX",
+        "LIT-BYTEARRAY-UTF8",
+        "LIT-BYTEARRAY-HEX"
+      ],
+      "CurvePoint": [
+        "LIT-CURVE-G1",
+        "LIT-CURVE-G2"
+      ],
+      "Sequence": [
+        "SEQUENCE-EXPRESSION",
+        "BLOCK-EXPRESSION"
+      ],
+      "Pipeline": [
+        "PIPE-ONE-LINE",
+        "PIPE-MULTILINE"
+      ],
+      "Var": [
+        "EXPR-VARIABLE",
+        "LIT-BOOL-TRUE",
+        "LIT-BOOL-FALSE",
+        "LIT-VOID"
+      ],
+      "Fn": [
+        "FN-ANONYMOUS",
+        "CAPTURE-FUNCTION",
+        "FN-ANON-BINOP"
+      ],
+      "List": [
+        "LIT-LIST-EMPTY",
+        "LIT-LIST-ELEMENTS",
+        "LIT-LIST-SPREAD"
+      ],
+      "Call": [
+        "CALL-POSITIONAL",
+        "CALL-LABELLED",
+        "CALL-MIXED"
+      ],
+      "BinOp": [
+        "OP-ADD",
+        "OP-EQ"
+      ],
+      "Assignment": [
+        "LET-VARIABLE",
+        "EXPECT-PATTERN",
+        "IF-IS-PATTERN-TYPE"
+      ],
+      "Trace": [
+        "TRACE-BASIC"
+      ],
+      "When": [
+        "WHEN"
+      ],
+      "If": [
+        "IF-ELSE",
+        "IF-ELSE-IF"
+      ],
+      "RecordAccess": [
+        "ACCESS-RECORD"
+      ],
+      "ModuleSelect": [
+        "SELECT-MODULE"
+      ],
+      "Tuple": [
+        "LIT-TUPLE"
+      ],
+      "Pair": [
+        "LIT-PAIR"
+      ],
+      "TupleIndex": [
+        "ACCESS-TUPLE",
+        "ACCESS-PAIR"
+      ],
+      "ErrorTerm": [
+        "FAIL-BARE",
+        "TODO-BARE"
+      ],
+      "RecordUpdate": [
+        "RECORD-UPDATE"
+      ],
+      "UnOp": [
+        "OP-NOT",
+        "OP-NEGATE"
+      ]
+    },
+    "UntypedExpr": {
+      "UInt": [
+        "LIT-INT-DECIMAL",
+        "LIT-INT-SEPARATOR",
+        "LIT-INT-HEX"
+      ],
+      "String": [
+        "LIT-STRING"
+      ],
+      "Sequence": [
+        "SEQUENCE-EXPRESSION",
+        "BLOCK-EXPRESSION"
+      ],
+      "Var": [
+        "EXPR-VARIABLE",
+        "LIT-BOOL-TRUE",
+        "LIT-VOID"
+      ],
+      "Fn": [
+        "FN-ANONYMOUS",
+        "CAPTURE-FUNCTION",
+        "FN-ANON-BINOP"
+      ],
+      "List": [
+        "LIT-LIST-EMPTY",
+        "LIT-LIST-ELEMENTS",
+        "LIT-LIST-SPREAD"
+      ],
+      "Call": [
+        "CALL-POSITIONAL",
+        "CALL-LABELLED"
+      ],
+      "BinOp": [
+        "OP-ADD",
+        "OP-EQ"
+      ],
+      "ByteArray": [
+        "LIT-BYTEARRAY-LIST-DECIMAL",
+        "LIT-BYTEARRAY-UTF8",
+        "LIT-BYTEARRAY-HEX"
+      ],
+      "CurvePoint": [
+        "LIT-CURVE-G1",
+        "LIT-CURVE-G2"
+      ],
+      "PipeLine": [
+        "PIPE-ONE-LINE",
+        "PIPE-MULTILINE"
+      ],
+      "Assignment": [
+        "LET-VARIABLE",
+        "EXPECT-PATTERN",
+        "IF-IS-PATTERN-TYPE"
+      ],
+      "Trace": [
+        "TRACE-BASIC",
+        "TODO-BARE",
+        "FAIL-BARE"
+      ],
+      "TraceIfFalse": [
+        "TRACE-QUESTION"
+      ],
+      "When": [
+        "WHEN"
+      ],
+      "If": [
+        "IF-ELSE"
+      ],
+      "FieldAccess": [
+        "ACCESS-RECORD",
+        "ACCESS-TUPLE",
+        "ACCESS-PAIR"
+      ],
+      "Tuple": [
+        "LIT-TUPLE"
+      ],
+      "Pair": [
+        "LIT-PAIR"
+      ],
+      "TupleIndex": [
+        "ACCESS-TUPLE",
+        "ACCESS-PAIR"
+      ],
+      "ErrorTerm": [
+        "FAIL-BARE",
+        "TODO-BARE"
+      ],
+      "RecordUpdate": [
+        "RECORD-UPDATE"
+      ],
+      "UnOp": [
+        "OP-NOT",
+        "OP-NEGATE"
+      ],
+      "LogicalOpChain": [
+        "BOOL-AND-BLOCK",
+        "BOOL-OR-BLOCK"
+      ]
+    },
+    "ByteArrayFormatPreference": {
+      "HexadecimalString": [
+        "LIT-BYTEARRAY-HEX",
+        "PAT-BYTEARRAY-HEX",
+        "CONFIG-BYTEARRAY-HEX-MAP"
+      ],
+      "ArrayOfBytes(Decimal)": [
+        "LIT-BYTEARRAY-LIST-DECIMAL",
+        "PAT-BYTEARRAY-LIST-DECIMAL"
+      ],
+      "ArrayOfBytes(Hexadecimal)": [
+        "LIT-BYTEARRAY-LIST-HEX",
+        "PAT-BYTEARRAY-LIST-HEX"
+      ],
+      "Utf8String": [
+        "LIT-BYTEARRAY-UTF8",
+        "PAT-BYTEARRAY-UTF8",
+        "CONFIG-BYTEARRAY-UTF8-STRING",
+        "CONFIG-BYTEARRAY-UTF8-MAP"
+      ]
+    },
+    "Base": {
+      "Decimal(no_underscore)": [
+        "LIT-INT-DECIMAL",
+        "PAT-INT-DECIMAL"
+      ],
+      "Decimal(numeric_underscore)": [
+        "LIT-INT-SEPARATOR",
+        "PAT-INT-SEPARATOR"
+      ],
+      "Hexadecimal": [
+        "LIT-INT-HEX",
+        "PAT-INT-HEX"
+      ]
+    },
+    "Bls12_381PointType": {
+      "G1": [
+        "LIT-CURVE-G1",
+        "TYPE-G1"
+      ],
+      "G2": [
+        "LIT-CURVE-G2",
+        "TYPE-G2"
+      ]
+    },
+    "SimpleExpr": {
+      "Int": [
+        "CONFIG-INT"
+      ],
+      "Bool": [
+        "CONFIG-BOOL"
+      ],
+      "ByteArray(Utf8String)": [
+        "CONFIG-BYTEARRAY-UTF8-STRING",
+        "CONFIG-BYTEARRAY-UTF8-MAP"
+      ],
+      "ByteArray(HexadecimalString)": [
+        "CONFIG-BYTEARRAY-HEX-MAP"
+      ],
+      "List(uniform)": [
+        "CONFIG-LIST"
+      ],
+      "List(heterogeneous_to_tuple)": [
+        "CONFIG-TUPLE"
+      ]
+    },
+    "PlutusProjectTarget": {
+      "V3(accepted)": [
+        "TARGET-PLUTUS-V3"
+      ],
+      "V1(rejected)": [
+        "NEG-TARGET-PLUTUS-V1"
+      ],
+      "V2(rejected)": [
+        "NEG-TARGET-PLUTUS-V2"
+      ]
+    },
+    "PreludeType": {
+      "Data": [
+        "TYPE-DATA"
+      ],
+      "Int": [
+        "TYPE-INT"
+      ],
+      "ByteArray": [
+        "TYPE-BYTEARRAY"
+      ],
+      "Bool": [
+        "TYPE-BOOL"
+      ],
+      "G1Element": [
+        "TYPE-G1"
+      ],
+      "G2Element": [
+        "TYPE-G2"
+      ],
+      "MillerLoopResult": [
+        "TYPE-MILLER"
+      ],
+      "Ordering": [
+        "TYPE-ORDERING"
+      ],
+      "String": [
+        "TYPE-STRING"
+      ],
+      "Void": [
+        "TYPE-VOID"
+      ],
+      "List": [
+        "TYPE-LIST"
+      ],
+      "Pair": [
+        "TYPE-PAIR"
+      ],
+      "Pairs": [
+        "TYPE-PAIRS"
+      ],
+      "Option": [
+        "TYPE-OPTION"
+      ],
+      "Never": [
+        "TYPE-NEVER"
+      ],
+      "ScriptContext": [
+        "TYPE-SCRIPT-CONTEXT"
+      ],
+      "PRNG": [
+        "FRAMEWORK-PRNG"
+      ],
+      "Fuzzer": [
+        "FRAMEWORK-FUZZER"
+      ],
+      "Sampler": [
+        "FRAMEWORK-SAMPLER"
+      ]
+    }
+  },
+  "keyword_map": {
+    "as": [
+      "PAT-AS",
+      "IMPORT-MODULE-ALIAS",
+      "IMPORT-ITEM-ALIAS"
+    ],
+    "bench": [
+      "DEF-BENCH",
+      "BENCH-VIA"
+    ],
+    "const": [
+      "DEF-CONST-PRIVATE",
+      "DEF-CONST-PUBLIC"
+    ],
+    "fn": [
+      "DEF-FN-PRIVATE",
+      "DEF-FN-PUBLIC",
+      "FN-ANONYMOUS"
+    ],
+    "if": [
+      "IF-ELSE",
+      "IF-IS-PATTERN-TYPE",
+      "IF-IS-TYPE"
+    ],
+    "else": [
+      "IF-ELSE",
+      "VAL-ELSE"
+    ],
+    "fail": [
+      "FAIL-BARE",
+      "FAIL-REASON",
+      "TEST-FAIL"
+    ],
+    "once": [
+      "TEST-FAIL-ONCE"
+    ],
+    "expect": [
+      "EXPECT-PATTERN",
+      "EXPECT-BOOLEAN",
+      "EXPECT-BACKPASS"
+    ],
+    "is": [
+      "WHEN",
+      "IF-IS-PATTERN-TYPE",
+      "IF-IS-TYPE"
+    ],
+    "let": [
+      "LET-VARIABLE",
+      "LET-DESTRUCTURE",
+      "LET-BACKPASS"
+    ],
+    "opaque": [
+      "DEF-TYPE-OPAQUE-PRIVATE",
+      "DEF-TYPE-OPAQUE-PUBLIC"
+    ],
+    "pub": [
+      "DEF-FN-PUBLIC",
+      "DEF-CONST-PUBLIC",
+      "DEF-TYPE-PUBLIC",
+      "DEF-TYPE-ALIAS-PUBLIC",
+      "DEF-TYPE-OPAQUE-PUBLIC"
+    ],
+    "use": [
+      "IMPORT-QUALIFIED",
+      "IMPORT-UNQUALIFIED"
+    ],
+    "test": [
+      "DEF-TEST",
+      "TEST-UNIT"
+    ],
+    "todo": [
+      "TODO-BARE",
+      "TODO-REASON",
+      "FN-EMPTY-BODY-TODO"
+    ],
+    "type": [
+      "DEF-TYPE-PRIVATE",
+      "DEF-TYPE-ALIAS-PRIVATE"
+    ],
+    "when": [
+      "WHEN"
+    ],
+    "trace": [
+      "TRACE-BASIC",
+      "TEST-TRACE"
+    ],
+    "validator": [
+      "DEF-VALIDATOR"
+    ],
+    "via": [
+      "TEST-PROPERTY-VIA",
+      "BENCH-VIA"
+    ],
+    "and": [
+      "BOOL-AND-BLOCK"
+    ],
+    "or": [
+      "BOOL-OR-BLOCK"
+    ],
+    "error": [
+      "ERROR-ALIAS"
+    ]
+  },
+  "unmapped_surface_variants": [],
+  "unmapped_keywords_or_aliases": [],
+  "positive_project_targets": [
+    "V3"
+  ],
+  "rejected_project_targets": [
+    "V1",
+    "V2"
+  ]
+}
