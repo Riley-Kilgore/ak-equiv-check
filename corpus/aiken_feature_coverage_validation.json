@@ -1,0 +1,52 @@
+{
+  "generated_at": "2026-08-13",
+  "ok": true,
+  "checks": {
+    "candidate_count": 260,
+    "candidate_unique_urls": 260,
+    "candidate_orders_consecutive": true,
+    "first_wave_count": 53,
+    "mandatory_public_source_count": 13,
+    "immutable_public_source_ref_count": 13,
+    "unresolved_public_source_ref_count": 0,
+    "public_source_execution_statuses": [
+      "not-run"
+    ],
+    "required_internal_source_status": "missing-required-fixture",
+    "non_builtin_feature_count": 306,
+    "unique_non_builtin_feature_ids": 306,
+    "active_builtin_count": 87,
+    "unique_builtin_names": 87,
+    "contract_row_count": 393,
+    "all_rows_have_sources": true,
+    "all_rows_have_evidence_rules": true,
+    "all_blaster_rows_require_uplc": true,
+    "surface_variant_count": 160,
+    "unmapped_surface_variant_count": 0,
+    "keyword_or_alias_count": 24,
+    "unmapped_keyword_or_alias_count": 0,
+    "positive_project_targets": [
+      "V3"
+    ],
+    "rejected_project_targets": [
+      "V1",
+      "V2"
+    ],
+    "excluded_inactive_builtins": [
+      "exp_mod_integer",
+      "case_list",
+      "case_data"
+    ]
+  },
+  "sha256": {
+    "aiken_equivalence_candidates.json": "0c7864c6ccd2a0a9a184c5a01e464f62eca8b1bbb7d26763800c8b3c7b415427",
+    "aiken_equivalence_candidates.md": "7d3dc11dd42dd2656928c3342b5e3e5979b58135cb55b8d9b94c214455cd1033",
+    "aiken_equivalence_repos.txt": "46b12662f158c44d2642a9f19d6e909c88f9b3e798e779bad222849666e3ad43",
+    "aiken_language_features_v1_1_23.json": "8ae7f9425a793f4b48d810a99537495ce617e4e5466f69a918d4f2a5630448fa",
+    "aiken_compiler_surface_audit.json": "8f9bdf4140bf0d51a86e2d6b314d0abb7184214d6c4d553d61a163384e54f349",
+    "aiken_feature_coverage_matrix.md": "103c8fb6f13d0caf2466a21bd22aa4c1c7301035b95d46eb595195240d98c5de",
+    "aiken_feature_sentinel_spec.md": "b9dc376637311a07392ec3d4a9e59f0a614bf3e3ec4507cc4eefa34f464a5267",
+    "aiken_mandatory_corpus.json": "65a9a853c568df6e0f0438aa3da8b09a9e736a76d82c6dc6f3ce5f90f8f4c9f8",
+    "aiken_mandatory_repos.txt": "37c45f6210fb2012f6dfdc3710d7660fbb9b1d971572ade46d2d25513be79a0f"
+  }
+}
