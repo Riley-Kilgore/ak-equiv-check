@@ -1,0 +1,15 @@
+{
+  "old": {
+    "release": "v1.1.22",
+    "reported_version": "aiken v1.1.22+39d6b04",
+    "git_revision": "39d6b04",
+    "binary_sha256": "8d9ed739bc093d26bab80a2b0551d44546bf570c2650c97e0274455ce394bf89"
+  },
+  "new": {
+    "release": "v1.1.23",
+    "reported_version": "aiken v1.1.23+8949565",
+    "git_revision": "8949565",
+    "binary_sha256": "240e3340d8b999711e092f19929adc713dba78be5c2dafc645ccc5d56acf6dab"
+  },
+  "selection_rule": "The old compiler is the immediately preceding published release, minimizing unrelated language drift while comparing v1.1.23 code generation."
+}

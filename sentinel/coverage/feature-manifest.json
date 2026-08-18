@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "package": "equiv/sentinel",
+  "compiler_pair": "../../corpus/compiler_pair.json",
+  "features": [],
+  "builtins": []
+}

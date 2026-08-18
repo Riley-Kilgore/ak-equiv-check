@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://equiv.local/schemas/build.schema.json",
+  "title": "Paired Aiken build capture",
+  "type": "object",
+  "required": ["package", "compiler", "primary_exit_code", "runs", "artifacts"],
+  "properties": {
+    "package": {"type": "string", "minLength": 1},
+    "compiler": {
+      "type": "object",
+      "required": ["label", "release", "reported_version", "binary_sha256", "executable"],
+      "properties": {
+        "label": {"enum": ["old", "new"]},
+        "release": {"type": "string", "pattern": "^v"},
+        "reported_version": {"type": "string", "minLength": 1},
+        "binary_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "executable": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "primary_exit_code": {"type": "integer"},
+    "runs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["trace_level", "command", "exit_code", "uplc_dump_exit_code", "stdout_path", "stderr_path"],
+        "properties": {
+          "trace_level": {"enum": ["silent", "compact", "verbose"]},
+          "command": {"type": "array", "items": {"type": "string"}},
+          "exit_code": {"type": "integer"},
+          "uplc_dump_exit_code": {"type": ["integer", "null"]},
+          "stdout_path": {"type": "string"},
+          "stderr_path": {"type": "string"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "kind", "trace_level", "sha256", "size"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "kind": {"type": "string", "minLength": 1},
+          "trace_level": {"enum": ["silent", "compact", "verbose"]},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "size": {"type": "integer", "minimum": 0}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,1 +1,4 @@
 work/
+tool/.venv/
+tool/aiken-shim/target/
+**/__pycache__/

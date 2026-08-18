@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "ast_backend": {
+    "kind": "compiler_shim",
+    "crate": "aiken-lang",
+    "compiler_revision": "8949565a9969278846ffefe30bc3b892029dd318",
+    "reason": "The unversioned tree-sitter grammar lacks v1.1.23 surfaces including benchmark definitions and curve-point expressions; compiler AST serialization cannot drift from the pinned parser and type checker."
+  },
+  "uplc_backend": {
+    "kind": "compiler_shim",
+    "crate": "uplc",
+    "compiler_revision": "8949565a9969278846ffefe30bc3b892029dd318",
+    "reason": "The pinned uplc crate decodes blueprint programs and exposes structural Term and DefaultFunction nodes."
+  },
+  "fixed_seed": 1,
+  "property_max_success": 100,
+  "benchmark_max_size": 30
+}

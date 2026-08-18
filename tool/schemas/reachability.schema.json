@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://equiv.local/schemas/reachability.schema.json",
+  "title": "Optimized UPLC reachability proofs",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "feature_id",
+      "row_kind",
+      "uplc_path",
+      "branch_selector",
+      "proof_kind",
+      "expected_builtin",
+      "builtin_ast_paths",
+      "structural_pass",
+      "selected_evaluation",
+      "baseline_evaluation",
+      "differential_pass",
+      "pass"
+    ],
+    "properties": {
+      "feature_id": {"type": "string", "minLength": 1},
+      "row_kind": {"enum": ["feature", "builtin"]},
+      "uplc_path": {"type": ["string", "null"]},
+      "branch_selector": {"type": ["integer", "null"]},
+      "proof_kind": {"enum": ["validator_differential", "uplc_builtin_path_and_validator_differential"]},
+      "expected_builtin": {"type": ["string", "null"]},
+      "builtin_ast_paths": {
+        "type": "array",
+        "items": {"type": "array", "items": {"type": ["string", "integer"]}}
+      },
+      "structural_pass": {"type": "boolean"},
+      "selected_evaluation": {"type": ["object", "null"]},
+      "baseline_evaluation": {"type": ["object", "null"]},
+      "differential_pass": {"type": "boolean"},
+      "pass": {"type": "boolean"}
+    },
+    "additionalProperties": false
+  }
+}
