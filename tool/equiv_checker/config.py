@@ -57,6 +57,24 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def sha256_tree(root: Path) -> str:
+    digest = hashlib.sha256()
+    ignored_parts = {".git", "artifacts", "build", "docs", "__pycache__"}
+    for path in sorted(candidate for candidate in root.rglob("*") if candidate.is_file()):
+        relative = path.relative_to(root)
+        if any(part in ignored_parts for part in relative.parts):
+            continue
+        if relative.name == "plutus.json" or (
+            relative.name.startswith("plutus-") and relative.suffix == ".json"
+        ):
+            continue
+        digest.update(relative.as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
 def _installed_aiken(release: str) -> Path:
     override = os.getenv(f"AIKEN_{'OLD' if release == load_json(COMPILER_PAIR_PATH)['old']['release'] else 'NEW'}")
     if override:

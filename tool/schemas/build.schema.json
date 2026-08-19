@@ -3,7 +3,7 @@
   "$id": "https://equiv.local/schemas/build.schema.json",
   "title": "Paired Aiken build capture",
   "type": "object",
-  "required": ["package", "compiler", "primary_exit_code", "runs", "artifacts"],
+  "required": ["package", "compiler", "primary_exit_code", "runs", "negative_runs", "artifacts"],
   "properties": {
     "package": {"type": "string", "minLength": 1},
     "compiler": {
@@ -24,9 +24,10 @@
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["trace_level", "command", "exit_code", "uplc_dump_exit_code", "stdout_path", "stderr_path"],
+        "required": ["trace_level", "trace_filter", "command", "exit_code", "uplc_dump_exit_code", "stdout_path", "stderr_path"],
         "properties": {
           "trace_level": {"enum": ["silent", "compact", "verbose"]},
+          "trace_filter": {"enum": ["user-defined", "compiler-generated", "all"]},
           "command": {"type": "array", "items": {"type": "string"}},
           "exit_code": {"type": "integer"},
           "uplc_dump_exit_code": {"type": ["integer", "null"]},
@@ -36,13 +37,51 @@
         "additionalProperties": false
       }
     },
+    "negative_runs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "feature_id",
+          "command",
+          "exit_code",
+          "diagnostic_pattern",
+          "source_pattern",
+          "expected_failure_kind",
+          "observed_failure_kind",
+          "diagnostic_code",
+          "diagnostic_matched",
+          "source_matched",
+          "pass",
+          "stdout_path",
+          "stderr_path"
+        ],
+        "properties": {
+          "feature_id": {"type": "string", "pattern": "^NEG-"},
+          "command": {"type": "array", "items": {"type": "string"}},
+          "exit_code": {"type": "integer"},
+          "diagnostic_pattern": {"type": "string", "minLength": 1},
+          "source_pattern": {"type": "string", "minLength": 1},
+          "expected_failure_kind": {"enum": ["diagnostic", "compiler_panic"]},
+          "observed_failure_kind": {"enum": ["diagnostic", "compiler_panic", "unknown"]},
+          "diagnostic_code": {"type": ["string", "null"]},
+          "diagnostic_matched": {"type": "boolean"},
+          "source_matched": {"type": "boolean"},
+          "pass": {"type": "boolean"},
+          "stdout_path": {"type": "string", "minLength": 1},
+          "stderr_path": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": false
+      }
+    },
     "artifacts": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["path", "kind", "trace_level", "sha256", "size"],
+        "required": ["path", "kind", "trace_level", "trace_filter", "sha256", "size"],
         "properties": {
           "path": {"type": "string", "minLength": 1},
+          "trace_filter": {"enum": ["user-defined", "compiler-generated", "all"]},
           "kind": {"type": "string", "minLength": 1},
           "trace_level": {"enum": ["silent", "compact", "verbose"]},
           "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},

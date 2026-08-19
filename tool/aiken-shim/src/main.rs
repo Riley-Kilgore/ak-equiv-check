@@ -1,8 +1,4 @@
-use aiken_project::{
-    Project,
-    options::Options,
-    telemetry::EventListener,
-};
+use aiken_project::{Project, options::Options, telemetry::EventListener};
 use serde_json::{Value, json};
 use std::{env, error::Error, io, path::PathBuf};
 use uplc::ast::{Name, Program, Term as UplcTerm};
@@ -19,9 +15,12 @@ fn failure(message: impl Into<String>) -> io::Error {
 fn typed_ast(package: PathBuf) -> Result<Value, Box<dyn Error>> {
     let root = package.canonicalize()?;
     let mut project = Project::new(root.clone(), Quiet)?;
-    project
-        .compile(Options::default())
-        .map_err(|errors| failure(format!("{errors:#?}")))?;
+    project.compile(Options::default()).map_err(|errors| {
+        failure(format!(
+            "typed AST compilation failed with {} error(s)",
+            errors.len()
+        ))
+    })?;
 
     let modules = project
         .modules()
@@ -104,11 +103,9 @@ fn inspect_uplc(blueprint_path: PathBuf) -> Result<Value, Box<dyn Error>> {
         .validators
         .iter()
         .map(|validator| {
-            let program: Program<Name> = validator
-                .program
-                .inner()
-                .try_into()
-                .map_err(|error| failure(format!("failed to decode {}: {error:?}", validator.title)))?;
+            let program: Program<Name> = validator.program.inner().try_into().map_err(|error| {
+                failure(format!("failed to decode {}: {error:?}", validator.title))
+            })?;
             let mut builtins = Vec::new();
             walk_builtins(&program.term, &mut Vec::new(), &mut builtins);
             Ok(json!({
@@ -126,9 +123,11 @@ fn inspect_uplc(blueprint_path: PathBuf) -> Result<Value, Box<dyn Error>> {
     }))
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn run() -> Result<String, Box<dyn Error>> {
     let mut args = env::args().skip(1);
-    let command = args.next().ok_or_else(|| failure("expected typed-ast or inspect-uplc"))?;
+    let command = args
+        .next()
+        .ok_or_else(|| failure("expected typed-ast or inspect-uplc"))?;
     let path = PathBuf::from(args.next().ok_or_else(|| failure("expected a path"))?);
     if args.next().is_some() {
         return Err(failure("unexpected extra arguments").into());
@@ -139,6 +138,18 @@ fn main() -> Result<(), Box<dyn Error>> {
         "inspect-uplc" => inspect_uplc(path)?,
         _ => return Err(failure(format!("unknown command: {command}")).into()),
     };
-    println!("{}", serde_json::to_string(&output)?);
+    Ok(serde_json::to_string(&output)?)
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let worker = std::thread::Builder::new()
+        .name("aiken-equiv-shim".to_string())
+        .stack_size(64 * 1024 * 1024)
+        .spawn(|| run().map_err(|error| error.to_string()))?;
+    let output = worker
+        .join()
+        .map_err(|_| failure("compiler shim worker panicked"))?
+        .map_err(failure)?;
+    println!("{output}");
     Ok(())
 }

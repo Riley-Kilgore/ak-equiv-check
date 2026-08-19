@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://equiv.local/schemas/handoff.schema.json",
+  "title": "Paired UPLC handoff",
+  "type": "object",
+  "required": ["schema_version", "package", "compiler_pair", "record_count", "records"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "package": {"type": "string", "minLength": 1},
+    "compiler_pair": {
+      "type": "object",
+      "required": ["old", "new"],
+      "properties": {
+        "old": {"type": "string", "minLength": 1},
+        "new": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "record_count": {"const": 306},
+    "records": {
+      "type": "array",
+      "minItems": 306,
+      "maxItems": 306,
+      "items": {
+        "type": "object",
+        "required": ["feature_id", "row_kind", "uplc_path", "old", "new", "blaster_pending"],
+        "properties": {
+          "feature_id": {"type": "string", "minLength": 1},
+          "row_kind": {"enum": ["feature", "builtin"]},
+          "uplc_path": {"type": "string", "minLength": 1},
+          "old": {"$ref": "#/$defs/artifact"},
+          "new": {"$ref": "#/$defs/artifact"},
+          "blaster_pending": {"type": "boolean"}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "required": ["path", "sha256", "reachability_pass"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "reachability_pass": {"const": true}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

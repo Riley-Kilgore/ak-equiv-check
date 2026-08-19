@@ -24,7 +24,14 @@
       "row_kind": {"enum": ["feature", "builtin"]},
       "uplc_path": {"type": ["string", "null"]},
       "branch_selector": {"type": ["integer", "null"]},
-      "proof_kind": {"enum": ["validator_differential", "uplc_builtin_path_and_validator_differential"]},
+      "proof_kind": {
+        "enum": [
+          "validator_differential",
+          "exported_handler_differential",
+          "uplc_builtin_path_and_validator_differential",
+          "uplc_builtin_path_and_exported_handler_differential"
+        ]
+      },
       "expected_builtin": {"type": ["string", "null"]},
       "builtin_ast_paths": {
         "type": "array",

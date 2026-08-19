@@ -1,0 +1,13 @@
+{
+  "feature_id": "NEG-STRING-PATTERN",
+  "diagnostic_pattern": "pattern",
+  "diagnostic_patterns": {
+    "old": "pattern",
+    "new": "pattern"
+  },
+  "failure_kinds": {
+    "old": "diagnostic",
+    "new": "diagnostic"
+  },
+  "source_pattern": "fixture.ak"
+}

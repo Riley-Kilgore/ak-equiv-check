@@ -15,4 +15,20 @@ name = "aiken-lang/stdlib"
 version = "v3.1.0"
 source = "github"
 
-[config]
+[config.default]
+price = 1000000
+is_mainnet = true
+network = "mainnet"
+network_utf8 = { bytes = "preview", encoding = "utf8" }
+policy_hex = { bytes = "deadbeef", encoding = "hex" }
+quotas = [1, 2, 3]
+asset = ["HOSKY", 42]
+
+[config.preview]
+price = 500000
+is_mainnet = false
+network = "preview"
+network_utf8 = { bytes = "preview", encoding = "utf8" }
+policy_hex = { bytes = "deadbeef", encoding = "hex" }
+quotas = [3, 2, 1]
+asset = ["HOSKY", 42]

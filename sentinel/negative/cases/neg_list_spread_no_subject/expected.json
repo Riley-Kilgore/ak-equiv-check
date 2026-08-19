@@ -1,0 +1,13 @@
+{
+  "feature_id": "NEG-LIST-SPREAD-NO-SUBJECT",
+  "diagnostic_pattern": "spread",
+  "diagnostic_patterns": {
+    "old": "spread",
+    "new": "spread"
+  },
+  "failure_kinds": {
+    "old": "diagnostic",
+    "new": "diagnostic"
+  },
+  "source_pattern": "fixture.ak"
+}

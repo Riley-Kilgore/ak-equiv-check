@@ -1,0 +1,13 @@
+{
+  "feature_id": "NEG-OPAQUE-CONSTRUCTOR",
+  "diagnostic_pattern": "opaque",
+  "diagnostic_patterns": {
+    "old": "opaque",
+    "new": "opaque"
+  },
+  "failure_kinds": {
+    "old": "diagnostic",
+    "new": "diagnostic"
+  },
+  "source_pattern": "fixture.ak"
+}

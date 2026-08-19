@@ -1,0 +1,13 @@
+{
+  "feature_id": "NEG-TAG-OVERFLOW",
+  "diagnostic_pattern": "decorator tag",
+  "diagnostic_patterns": {
+    "old": "PosOverflow",
+    "new": "decorator tag"
+  },
+  "failure_kinds": {
+    "old": "compiler_panic",
+    "new": "diagnostic"
+  },
+  "source_pattern": "fixture.ak"
+}

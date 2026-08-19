@@ -1,0 +1,13 @@
+{
+  "feature_id": "NEG-TYPE-MISMATCH",
+  "diagnostic_pattern": "struggled to unify",
+  "diagnostic_patterns": {
+    "old": "struggled to unify",
+    "new": "struggled to unify"
+  },
+  "failure_kinds": {
+    "old": "diagnostic",
+    "new": "diagnostic"
+  },
+  "source_pattern": "fixture.ak"
+}

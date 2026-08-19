@@ -1,0 +1,13 @@
+{
+  "feature_id": "NEG-INVALID-VALIDATOR-ARITY",
+  "diagnostic_pattern": "not enough arguments",
+  "diagnostic_patterns": {
+    "old": "not enough arguments",
+    "new": "not enough arguments"
+  },
+  "failure_kinds": {
+    "old": "diagnostic",
+    "new": "diagnostic"
+  },
+  "source_pattern": "fixture.ak"
+}

@@ -12,7 +12,7 @@
     "public_source_execution_statuses": [
       "not-run"
     ],
-    "required_internal_source_status": "missing-required-fixture",
+    "required_internal_source_status": "pinned:68657a2569041d9d9fdd566debf8266b9d3ac6257f11a3e3e3ff524b1a421a2e",
     "non_builtin_feature_count": 306,
     "unique_non_builtin_feature_ids": 306,
     "active_builtin_count": 87,
@@ -47,6 +47,7 @@
     "aiken_feature_coverage_matrix.md": "103c8fb6f13d0caf2466a21bd22aa4c1c7301035b95d46eb595195240d98c5de",
     "aiken_feature_sentinel_spec.md": "b9dc376637311a07392ec3d4a9e59f0a614bf3e3ec4507cc4eefa34f464a5267",
     "aiken_mandatory_corpus.json": "65a9a853c568df6e0f0438aa3da8b09a9e736a76d82c6dc6f3ce5f90f8f4c9f8",
-    "aiken_mandatory_repos.txt": "37c45f6210fb2012f6dfdc3710d7660fbb9b1d971572ade46d2d25513be79a0f"
+    "aiken_mandatory_repos.txt": "37c45f6210fb2012f6dfdc3710d7660fbb9b1d971572ade46d2d25513be79a0f",
+    "sentinel/": "68657a2569041d9d9fdd566debf8266b9d3ac6257f11a3e3e3ff524b1a421a2e"
   }
 }

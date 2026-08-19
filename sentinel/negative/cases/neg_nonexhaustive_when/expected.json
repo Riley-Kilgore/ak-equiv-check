@@ -1,0 +1,13 @@
+{
+  "feature_id": "NEG-NONEXHAUSTIVE-WHEN",
+  "diagnostic_pattern": "non-exhaustive",
+  "diagnostic_patterns": {
+    "old": "non-exhaustive",
+    "new": "non-exhaustive"
+  },
+  "failure_kinds": {
+    "old": "diagnostic",
+    "new": "diagnostic"
+  },
+  "source_pattern": "fixture.ak"
+}

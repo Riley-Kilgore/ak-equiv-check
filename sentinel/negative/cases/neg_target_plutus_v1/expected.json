@@ -1,0 +1,13 @@
+{
+  "feature_id": "NEG-TARGET-PLUTUS-V1",
+  "diagnostic_pattern": "only supports Plutus V3",
+  "diagnostic_patterns": {
+    "old": "only supports Plutus V3",
+    "new": "only supports Plutus V3"
+  },
+  "failure_kinds": {
+    "old": "diagnostic",
+    "new": "diagnostic"
+  },
+  "source_pattern": "aiken.toml"
+}

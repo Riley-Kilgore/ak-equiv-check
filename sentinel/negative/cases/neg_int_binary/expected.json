@@ -1,0 +1,13 @@
+{
+  "feature_id": "NEG-INT-BINARY",
+  "diagnostic_pattern": "discarded expression",
+  "diagnostic_patterns": {
+    "old": "discarded expression",
+    "new": "discarded expression"
+  },
+  "failure_kinds": {
+    "old": "diagnostic",
+    "new": "diagnostic"
+  },
+  "source_pattern": "fixture.ak"
+}

@@ -36,7 +36,16 @@ class AstNode:
 
 
 def ensure_shim() -> Path:
-    if not SHIM_BINARY.exists():
+    inputs = [
+        SHIM_MANIFEST,
+        SHIM_MANIFEST.parent / "Cargo.lock",
+        *sorted((SHIM_MANIFEST.parent / "src").rglob("*.rs")),
+    ]
+    rebuild = not SHIM_BINARY.exists() or any(
+        path.exists() and path.stat().st_mtime_ns > SHIM_BINARY.stat().st_mtime_ns
+        for path in inputs
+    )
+    if rebuild:
         completed = subprocess.run(
             ["cargo", "build", "--release", "--manifest-path", str(SHIM_MANIFEST)],
             text=True,
@@ -253,7 +262,25 @@ def _source_records(
             row = feature_by_id.get(row_id) if marker_kind == "feature" else builtin_by_id.get(row_id)
             if row is None:
                 raise ValueError(f"unknown {marker_kind} marker {row_id} in {path}")
-            node = _best_node(nodes, match.start(), match.end(), marker=True)
+            evidence_start = match.start()
+            evidence_end = match.end()
+            node = _best_node(nodes, evidence_start, evidence_end, marker=True)
+            if marker_kind == "builtin":
+                call = re.search(
+                    rf"\b{re.escape(row['aiken_name'])}\b",
+                    code[match.end() : match.end() + 800],
+                )
+                if call is None:
+                    raise ValueError(
+                        f"builtin marker {row_id} has no following {row['aiken_name']} reference in {path}"
+                    )
+                evidence_start = match.end() + call.start()
+                evidence_end = match.end() + call.end()
+                node = _best_node(nodes, evidence_start, evidence_end, marker=False)
+                if node is None or node.kind not in {"Call", "ModuleSelect"}:
+                    raise ValueError(
+                        f"builtin marker {row_id} is not bound to a typed builtin reference in {path}"
+                    )
             records.append(
                 _record(
                     row_id,
@@ -261,8 +288,8 @@ def _source_records(
                     package,
                     code,
                     node,
-                    match.start(),
-                    match.end(),
+                    evidence_start,
+                    evidence_end,
                     row.get("detector_hints", ["typed AST builtin call"])[0],
                     True,
                     int(raw_selector) if raw_selector is not None else None,
@@ -411,6 +438,38 @@ def _manifest_records(package: Path, features: Iterable[dict[str, Any]]) -> list
     return records
 
 
+def _negative_records(
+    package: Path, features: Iterable[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    rows = {
+        row["id"]: row for row in features if row.get("negative_compile_case")
+    }
+    records: list[dict[str, Any]] = []
+    negative_root = package / "negative" / "cases"
+    if not negative_root.exists():
+        return records
+    for path in sorted(negative_root.glob("*/**/fixture.ak")):
+        code = path.read_text(encoding="utf-8")
+        for match in MARKER.finditer(code):
+            marker_kind, row_id, _ = match.groups()
+            if marker_kind != "feature" or row_id not in rows:
+                continue
+            records.append(
+                _record(
+                    row_id,
+                    path,
+                    package,
+                    code,
+                    None,
+                    match.end(),
+                    match.end(),
+                    rows[row_id]["detector_hints"][0],
+                    True,
+                )
+            )
+    return records
+
+
 def census(package: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     contract = load_json(CONTRACT_PATH)
     ast_output = typed_ast(package)
@@ -421,6 +480,7 @@ def census(package: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         contract["active_uplc_builtins"],
     )
     records.extend(_manifest_records(package, contract["features"]))
+    records.extend(_negative_records(package, contract["features"]))
     records.sort(key=lambda record: (record["feature_id"], record["file"], record["line_start"]))
     return records, {
         "backend": ast_output["backend"],
