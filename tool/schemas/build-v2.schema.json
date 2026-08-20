@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://equiv.local/schemas/build-v2.schema.json",
+  "type": "object",
+  "required": [
+    "schema_version", "label", "package", "compiler", "source_copy",
+    "source_hash_before", "source_hash_after", "source_unchanged",
+    "dependency_lock_hash_before", "dependency_lock_hash_after",
+    "dependency_lock_unchanged", "primary_exit_code", "build_timed_out",
+    "uplc_extraction_exit_code", "uplc_extraction_timed_out", "runs",
+    "negative_runs", "artifacts"
+  ],
+  "properties": {
+    "schema_version": {"const": 2},
+    "label": {"enum": ["old", "new"]},
+    "package": {"type": "string", "minLength": 1},
+    "compiler": {
+      "type": "object",
+      "required": ["label", "release", "reported_version", "git_revision", "binary_sha256", "executable"],
+      "properties": {
+        "label": {"enum": ["old", "new"]},
+        "release": {"type": "string"},
+        "reported_version": {"type": "string", "minLength": 1},
+        "git_revision": {"type": ["string", "null"]},
+        "binary_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "executable": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "source_copy": {"type": "string", "minLength": 1},
+    "source_hash_before": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_hash_after": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_unchanged": {"type": "boolean"},
+    "dependency_lock_hash_before": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "dependency_lock_hash_after": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "dependency_lock_unchanged": {"type": "boolean"},
+    "primary_exit_code": {"type": ["integer", "null"]},
+    "build_timed_out": {"type": "boolean"},
+    "uplc_extraction_exit_code": {"type": ["integer", "null"]},
+    "uplc_extraction_timed_out": {"type": "boolean"},
+    "runs": {"type": "array", "items": {"type": "object"}},
+    "negative_runs": {"type": "array", "items": {"type": "object"}},
+    "artifacts": {"type": "array", "items": {"type": "object"}}
+  },
+  "additionalProperties": false
+}

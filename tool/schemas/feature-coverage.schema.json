@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://equiv.local/schemas/feature-coverage.schema.json",
+  "type": "object",
+  "required": ["schema_version", "mode", "record_count", "records"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "mode": {"enum": ["package", "sentinel"]},
+    "record_count": {"type": "integer", "minimum": 0},
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "feature_id", "row_kind", "lanes", "manifest_present", "source_present",
+          "old_build_accepted",
+          "new_build_accepted", "lane_results_old", "lane_results_new",
+          "uplc_generated_old", "uplc_generated_new", "reachability_required",
+          "reachability_pass", "pair_id", "pair_status", "status"
+        ],
+        "properties": {
+          "feature_id": {"type": "string", "minLength": 1},
+          "row_kind": {"enum": ["feature", "builtin"]},
+          "lanes": {"type": "array", "items": {"type": "string"}},
+          "manifest_present": {"type": "boolean"},
+          "source_present": {"type": "boolean"},
+          "old_build_accepted": {"type": "boolean"},
+          "new_build_accepted": {"type": "boolean"},
+          "lane_results_old": {"type": "object", "additionalProperties": {"type": "boolean"}},
+          "lane_results_new": {"type": "object", "additionalProperties": {"type": "boolean"}},
+          "uplc_generated_old": {"type": ["boolean", "null"]},
+          "uplc_generated_new": {"type": ["boolean", "null"]},
+          "reachability_required": {"type": "boolean"},
+          "reachability_pass": {"type": "boolean"},
+          "pair_id": {"type": ["string", "null"]},
+          "pair_status": {"type": ["string", "null"]},
+          "status": {
+            "enum": [
+              "identical", "blaster_valid", "blaster_falsified_unreplayed",
+              "confirmed_non_equivalent", "blaster_inconclusive", "blaster_unsupported",
+              "blaster_timeout", "blaster_error", "old_build_failed", "new_build_failed",
+              "validator_missing_old", "validator_missing_new", "validator_signature_changed",
+              "feature_not_shared", "expected_negative_diagnostic", "not_applicable"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

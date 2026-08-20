@@ -5,8 +5,12 @@ import json
 import os
 import platform
 import tomllib
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any
+
+from .models import BlasterConfig, Timeouts
+from .process import run_process
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -16,6 +20,7 @@ DEFAULT_WORK_ROOT = REPOSITORY_ROOT / "work"
 CONTRACT_PATH = CORPUS_ROOT / "aiken_language_features_v1_1_23.json"
 COMPILER_PAIR_PATH = CORPUS_ROOT / "compiler_pair.json"
 SCANNER_CONFIG_PATH = TOOL_ROOT / "scanner_config.json"
+BLASTER_CONFIG_PATH = TOOL_ROOT / "blaster_config.json"
 SHIM_MANIFEST = TOOL_ROOT / "aiken-shim" / "Cargo.toml"
 SHIM_BINARY = TOOL_ROOT / "aiken-shim" / "target" / "release" / (
     "aiken-equiv-shim.exe" if os.name == "nt" else "aiken-equiv-shim"
@@ -27,8 +32,12 @@ class Compiler:
     label: str
     release: str
     reported_version: str
+    git_revision: str | None
     binary_sha256: str
     executable: Path
+
+    def identity(self) -> dict[str, Any]:
+        return asdict(self) | {"executable": str(self.executable)}
 
 
 def load_json(path: Path) -> dict:
@@ -75,8 +84,8 @@ def sha256_tree(root: Path) -> str:
     return digest.hexdigest()
 
 
-def _installed_aiken(release: str) -> Path:
-    override = os.getenv(f"AIKEN_{'OLD' if release == load_json(COMPILER_PAIR_PATH)['old']['release'] else 'NEW'}")
+def _installed_aiken(label: str, release: str) -> Path:
+    override = os.getenv(f"AIKEN_{label.upper()}")
     if override:
         return Path(override).expanduser().resolve()
 
@@ -91,24 +100,76 @@ def _installed_aiken(release: str) -> Path:
     return matches[0]
 
 
-def compiler_pair() -> tuple[Compiler, Compiler]:
-    pair = load_json(COMPILER_PAIR_PATH)
-    compilers = []
-    for label in ("old", "new"):
-        row = pair[label]
-        executable = _installed_aiken(row["release"])
-        actual_hash = sha256_file(executable)
-        if actual_hash != row["binary_sha256"]:
-            raise RuntimeError(
-                f"{label} compiler hash mismatch: expected {row['binary_sha256']}, got {actual_hash}"
-            )
-        compilers.append(
-            Compiler(
-                label=label,
-                release=row["release"],
-                reported_version=row["reported_version"],
-                binary_sha256=row["binary_sha256"],
-                executable=executable,
-            )
+def _compiler(
+    label: str,
+    configured: dict[str, Any],
+    executable_override: Path | None,
+    revision_override: str | None,
+) -> Compiler:
+    is_default = executable_override is None
+    executable = (
+        _installed_aiken(label, configured["release"])
+        if is_default
+        else executable_override.expanduser().resolve()
+    )
+    if not executable.is_file():
+        raise FileNotFoundError(f"{label} compiler does not exist: {executable}")
+    actual_hash = sha256_file(executable)
+    expected_hash = configured.get("binary_sha256") if is_default else None
+    if expected_hash and actual_hash != expected_hash:
+        raise RuntimeError(
+            f"{label} compiler hash mismatch: expected {expected_hash}, got {actual_hash}"
         )
-    return compilers[0], compilers[1]
+    version = run_process([executable, "--version"], REPOSITORY_ROOT, 30.0)
+    if version.timed_out or version.exit_code != 0:
+        detail = version.stderr.strip() or version.stdout.strip() or "no diagnostic"
+        raise RuntimeError(f"{label} compiler --version failed: {detail}")
+    reported_version = (version.stdout or version.stderr).strip().splitlines()[0]
+    return Compiler(
+        label=label,
+        release=configured["release"] if is_default else "custom",
+        reported_version=reported_version,
+        git_revision=(
+            revision_override
+            if revision_override is not None
+            else configured.get("git_revision")
+            if is_default
+            else None
+        ),
+        binary_sha256=actual_hash,
+        executable=executable,
+    )
+
+
+def compiler_pair(
+    *,
+    old_aiken: Path | None = None,
+    new_aiken: Path | None = None,
+    old_revision: str | None = None,
+    new_revision: str | None = None,
+) -> tuple[Compiler, Compiler]:
+    pair = load_json(COMPILER_PAIR_PATH)
+    return (
+        _compiler("old", pair["old"], old_aiken, old_revision),
+        _compiler("new", pair["new"], new_aiken, new_revision),
+    )
+
+
+def load_blaster_config(path: Path = BLASTER_CONFIG_PATH) -> BlasterConfig:
+    value = load_json(path)
+    backend_root = Path(value["backend_root"]).expanduser()
+    if not backend_root.is_absolute():
+        backend_root = (REPOSITORY_ROOT / backend_root).resolve()
+    fuel = value.get("fuel")
+    if not isinstance(fuel, int) or fuel <= 0:
+        raise ValueError("Blaster preparation fuel must be a positive integer")
+    return BlasterConfig(
+        backend_root=backend_root,
+        revisions=dict(value["revisions"]),
+        lean_version=str(value["lean_version"]),
+        z3_version=str(value["z3_version"]),
+        solver=str(value.get("solver", "z3")),
+        fuel=fuel,
+        timeouts=Timeouts.from_dict(value.get("timeouts", {})),
+        random_seed=int(value.get("random_seed", 1)),
+    )

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://equiv.local/schemas/script-pairs.schema.json",
+  "type": "object",
+  "required": ["schema_version", "record_count", "records"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "record_count": {"type": "integer", "minimum": 0},
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "pair_id", "validator_identity", "old_script", "new_script", "purpose",
+          "parameters", "covered_feature_ids", "plutus_version"
+        ],
+        "properties": {
+          "pair_id": {"type": "string", "minLength": 1},
+          "validator_identity": {"type": "object"},
+          "old_script": {"$ref": "#/$defs/script"},
+          "new_script": {"$ref": "#/$defs/script"},
+          "purpose": {"type": "string", "minLength": 1},
+          "parameters": {"type": "array", "items": {"type": "object"}},
+          "covered_feature_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+          "plutus_version": {"type": "string", "pattern": "^v[123]$"}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "script": {
+      "type": "object",
+      "required": ["path", "sha256", "size", "encoding"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "size": {"type": "integer", "minimum": 1},
+        "encoding": {"const": "single_cbor_hex"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

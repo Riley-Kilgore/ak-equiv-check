@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://equiv.local/schemas/pair-results.schema.json",
+  "type": "object",
+  "required": ["schema_version", "record_count", "records"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "record_count": {"type": "integer", "minimum": 0},
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "pair_id", "status", "source_identity", "validator_identity",
+          "compiler_pair", "old_script", "new_script", "purpose", "parameters",
+          "covered_feature_ids", "input_model", "domain_assumptions",
+          "semantic_contract", "excluded_observations", "blaster_dependencies",
+          "lean_version", "z3_version", "solver", "fuel", "timeouts", "command",
+          "exit_code", "duration_seconds", "generated_lean_path",
+          "generated_lean_sha256", "stdout_path", "stderr_path",
+          "solver_input_path", "solver_input_sha256", "witness", "phase_results",
+          "counterexample_replay", "error", "cost_and_trace"
+        ],
+        "properties": {
+          "pair_id": {"type": "string", "minLength": 1},
+          "status": {"$ref": "#/$defs/status"},
+          "source_identity": {"type": "object"},
+          "validator_identity": {"type": ["object", "null"]},
+          "compiler_pair": {"type": "object"},
+          "old_script": {"type": ["object", "null"]},
+          "new_script": {"type": ["object", "null"]},
+          "purpose": {"type": "string"},
+          "parameters": {"type": "array"},
+          "covered_feature_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+          "input_model": {"type": ["object", "null"]},
+          "domain_assumptions": {"type": "array", "items": {"type": "string"}},
+          "semantic_contract": {"type": ["string", "null"]},
+          "excluded_observations": {"type": "array", "items": {"type": "string"}},
+          "blaster_dependencies": {"type": "object"},
+          "lean_version": {"type": "string"},
+          "z3_version": {"type": "string"},
+          "solver": {"type": "string"},
+          "fuel": {"type": "integer", "minimum": 1},
+          "timeouts": {"type": "object"},
+          "command": {"type": ["array", "null"], "items": {"type": "string"}},
+          "exit_code": {"type": ["integer", "null"]},
+          "duration_seconds": {"type": "number", "minimum": 0},
+          "generated_lean_path": {"type": ["string", "null"]},
+          "generated_lean_sha256": {"type": ["string", "null"]},
+          "stdout_path": {"type": ["string", "null"]},
+          "stderr_path": {"type": ["string", "null"]},
+          "solver_input_path": {"type": ["string", "null"]},
+          "solver_input_sha256": {"type": ["string", "null"]},
+          "witness": {"type": ["object", "null"]},
+          "phase_results": {"type": "array", "items": {"type": "object"}},
+          "counterexample_replay": {"type": ["object", "null"]},
+          "error": {"type": ["string", "null"]},
+          "cost_and_trace": {"type": "object"},
+          "old_signature": {"type": ["object", "null"]},
+          "new_signature": {"type": ["object", "null"]},
+          "semantic_result": {"type": "boolean"},
+          "compatibility_result": {"type": "boolean"},
+          "build_label": {"enum": ["old", "new"]}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "status": {
+      "enum": [
+        "identical", "blaster_valid", "blaster_falsified_unreplayed",
+        "confirmed_non_equivalent", "blaster_inconclusive", "blaster_unsupported",
+        "blaster_timeout", "blaster_error", "old_build_failed", "new_build_failed",
+        "validator_missing_old", "validator_missing_new", "validator_signature_changed",
+        "feature_not_shared", "expected_negative_diagnostic", "not_applicable"
+      ]
+    }
+  }
+}

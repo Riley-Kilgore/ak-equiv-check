@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "backend_root": "tool/blaster-backend",
+  "revisions": {
+    "CardanoLedgerApiBlaster": "577e3eb03b5be09354cfdb1c0d0c12e9e16541a0",
+    "Lean-blaster": "402f6d22c1fc42e6e26255faac77e15b2450e4ab",
+    "PlutusCoreBlaster": "4ef48606303c45225d3ed2e2a87fc50280a763b7"
+  },
+  "lean_version": "4.24.0",
+  "z3_version": "4.15.4",
+  "solver": "z3",
+  "fuel": 10000,
+  "random_seed": 1,
+  "timeouts": {
+    "aiken_build": 300,
+    "uplc_extraction": 300,
+    "uplc_import": 120,
+    "uplc_preparation": 300,
+    "lean_elaboration": 300,
+    "blaster_optimization": 300,
+    "z3": 120,
+    "counterexample_replay": 120
+  }
+}

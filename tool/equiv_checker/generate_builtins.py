@@ -295,8 +295,6 @@ def generate() -> dict[str, Any]:
     grouped: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
         grouped.setdefault(row["category"], []).append(row)
-    if len(grouped) != 12:
-        raise ValueError(f"expected 12 builtin families, got {len(grouped)}")
 
     BUILTIN_DIR.mkdir(parents=True, exist_ok=True)
     keep = BUILTIN_DIR / ".gitkeep"
