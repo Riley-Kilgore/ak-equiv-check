@@ -1,0 +1,11 @@
+name = "equiv/generic-fixture"
+version = "0.0.0"
+compiler = "v1.1.23"
+plutus = "v3"
+license = "Apache-2.0"
+description = "Generic package fixture without sentinel metadata"
+
+[[dependencies]]
+name = "aiken-lang/stdlib"
+version = "v3.1.0"
+source = "github"
