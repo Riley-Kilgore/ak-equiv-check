@@ -4,115 +4,200 @@ from .models import InputModel, ScriptPair
 
 
 EQUIVALENCE_FORMULA = (
-    "forall modeled_input, domain(modeled_input) -> "
-    "observe(old_program(modeled_input)) = observe(new_program(modeled_input))"
+    "forall raw_arguments, "
+    "observe(old_program(raw_arguments)) = observe(new_program(raw_arguments))"
 )
+VALIDATOR_OBSERVATION = "success_or_failure_or_runtime_bound_exhausted"
+PURE_OBSERVATION = "returned_value_or_evaluation_failure_or_unexpected_type_or_runtime_bound_exhausted"
+RAW_UPLC_PROFILE = "raw-uplc/v1"
+LEDGER_VALID_PROFILE = "ledger-valid/v1"
 
 EXCLUDED_FROM_SEMANTIC_VERDICT = (
     "cpu_cost",
     "memory_cost",
     "trace_text",
     "compiler_diagnostics",
-    "generated_file_names",
+    "generated_names",
+    "file_paths",
 )
 
-
-_INPUT_TYPES = {
+_LEDGER_INPUT_TYPES = {
     "spending": "SpendingInput",
     "minting": "MintingInput",
     "rewarding": "RewardingInput",
     "certifying": "CertifyingInput",
-    "voting": "ScriptContext",
-    "proposing": "ScriptContext",
-    "fallback": "ScriptContext",
+}
+_PURPOSE_STEMS = {
+    "spending": "Spending",
+    "minting": "Minting",
+    "rewarding": "Rewarding",
+    "certifying": "Certifying",
+    "voting": "Voting",
+    "proposing": "Proposing",
 }
 
-_NONEMPTY_MODEL_TYPES = frozenset(
-    {
-        "Data",
-        "Integer",
-        "ScriptContext",
-        "SpendingInput",
-        "MintingInput",
-        "RewardingInput",
-        "CertifyingInput",
-    }
-)
 
-
-def _checked_non_vacuity(
-    variables: tuple[dict[str, str], ...], domain: str
-) -> dict[str, object]:
-    unknown = sorted({row["type"] for row in variables} - _NONEMPTY_MODEL_TYPES)
-    if unknown:
-        raise ValueError(
-            f"input model has no non-vacuity constructor check for: {', '.join(unknown)}"
-        )
-    if domain != "True":
-        raise ValueError(
-            "restricted input domains require an explicit witness implementation"
-        )
+def _raw_data_witness(names: tuple[str, ...]) -> dict[str, object]:
     return {
-        "status": "checked",
-        "method": "unrestricted-domain over explicitly inhabited model types",
-        "predicate": domain,
-        "inhabited_types": sorted({row["type"] for row in variables}),
+        "encoding": "PlutusData",
+        "arguments": [
+            {"name": name, "value": {"kind": "integer", "value": 0}}
+            for name in names
+        ],
+        "lean_expression": "PlutusCore.Data.I 0",
     }
 
 
-def validator_input_model(pair: ScriptPair) -> InputModel:
-    variables = tuple(
-        {"name": f"parameter{index}", "type": "Data"}
-        for index, _parameter in enumerate(pair.parameters)
-    )
-    input_type = (
-        "ScriptContext"
-        if pair.plutus_version.lower() in {"v3", "3", "plutusv3"}
-        else _INPUT_TYPES.get(pair.purpose)
-    )
-    if input_type is None:
-        raise ValueError(f"unsupported validator purpose: {pair.purpose}")
-    variables += ({"name": "input", "type": input_type},)
-    components = ["validator_parameters"] if pair.parameters else []
+def _raw_argument_names(pair: ScriptPair) -> tuple[str, ...]:
+    parameters = tuple(f"parameter{index}" for index, _ in enumerate(pair.parameters))
+    normalized = pair.plutus_version.lower().removeprefix("plutus").removeprefix("v")
+    if normalized == "3":
+        return parameters + ("script_context_data",)
     if pair.purpose == "spending":
-        components.append("datum")
-    components.extend(["redeemer", "script_context", "validator_purpose"])
-    domain = "True"
-    assumptions = (
-        "All validator parameters range over unrestricted Plutus Data values.",
-        "Datum and redeemer values range over unrestricted Plutus Data within the selected ledger model.",
-        "Script contexts range over every value representable by the pinned Cardano ledger model; no ledger-validity predicate narrows the domain.",
-        "The same parameters and ledger input are applied to both UPLC programs with the same preparation fuel.",
-        "Success means CEK evaluation halts with a value; every other terminal outcome is unsuccessful.",
+        return parameters + ("datum_data", "redeemer_data", "script_context_data")
+    if pair.purpose in {"minting", "rewarding", "certifying"}:
+        return parameters + ("redeemer_data", "script_context_data")
+    return parameters
+
+
+def raw_validator_input_model(pair: ScriptPair) -> InputModel:
+    names = _raw_argument_names(pair)
+    supported = bool(names) and not (
+        pair.plutus_version.lower() not in {"v3", "3", "plutusv3"}
+        and pair.purpose in {"fallback", "voting", "proposing"}
     )
+    reason = None
+    if not supported:
+        reason = (
+            "fallback or governance arity is not uniquely defined for pre-V3 compiled scripts"
+            if pair.purpose in {"fallback", "voting", "proposing"}
+            else "the compiled raw UPLC arity is unknown"
+        )
+    variables = tuple({"name": name, "type": "Data"} for name in names)
+    components: list[str] = []
+    if pair.parameters:
+        components.append("validator_parameters")
+    components.extend(name.removesuffix("_data") for name in names[len(pair.parameters) :])
     return InputModel(
-        kind="validator",
+        kind="validator_raw",
+        profile=RAW_UPLC_PROFILE,
+        version="1",
         plutus_version=pair.plutus_version,
         purpose=pair.purpose,
         variables=variables,
         quantified_components=tuple(components),
-        domain_expression=domain,
-        domain_assumptions=assumptions,
-        observation="successful_or_unsuccessful",
-        non_vacuity=_checked_non_vacuity(variables, domain),
+        argument_order=names,
+        arity=len(names),
+        domain_expression="True",
+        domain_assumptions=(
+            "Every argument ranges over all Plutus Data, including malformed values for the Aiken schema.",
+            "The argument order is the exact compiled UPLC interface after validator parameters.",
+            "No Cardano ledger validity predicate restricts the raw domain.",
+            "Success and explicit CEK failure are logical observations; cost and trace are evidence only.",
+            "Runtime-step-bound exhaustion is distinct from validator failure.",
+        ),
+        domain_witness=_raw_data_witness(names) if supported else None,
+        observation=VALIDATOR_OBSERVATION,
+        non_vacuity={
+            "status": "generated_formal_witness" if supported else "unsupported",
+            "method": "Lean definition plus elaborated theorem that the concrete Data.I 0 tuple satisfies True",
+            "predicate": "True",
+            "artifact_required": supported,
+        },
+        supported=supported,
+        unsupported_reason=reason,
     )
+
+
+def ledger_validator_input_model(pair: ScriptPair) -> InputModel:
+    normalized = pair.plutus_version.lower().removeprefix("plutus").removeprefix("v")
+    supported = pair.purpose in _PURPOSE_STEMS and (
+        normalized == "3" or pair.purpose in _LEDGER_INPUT_TYPES
+    )
+    reason = None
+    if pair.purpose == "fallback":
+        reason = "an else handler has no single ledger purpose; raw-uplc covers every encoded V3 purpose"
+    elif not supported:
+        reason = f"ledger-valid model is unavailable for {pair.purpose} under Plutus V{normalized}"
+
+    parameters = tuple(
+        {"name": f"parameter{index}", "type": "Data"}
+        for index, _ in enumerate(pair.parameters)
+    )
+    input_type = "ScriptContext" if normalized == "3" else _LEDGER_INPUT_TYPES.get(pair.purpose, "ScriptContext")
+    variables = parameters + ({"name": "ledger_input", "type": input_type},)
+    if normalized == "3" and pair.purpose in _PURPOSE_STEMS:
+        stem = _PURPOSE_STEMS[pair.purpose]
+        domain = f"validScriptContext ledger_input && is{stem}ScriptInfo ledger_input"
+    elif pair.purpose in _PURPOSE_STEMS:
+        domain = f"valid{_PURPOSE_STEMS[pair.purpose]}Context ledger_input"
+    else:
+        domain = "False"
+    order = tuple(row["name"] for row in variables)
+    return InputModel(
+        kind="validator_ledger",
+        profile=LEDGER_VALID_PROFILE,
+        version="1",
+        plutus_version=pair.plutus_version,
+        purpose=pair.purpose,
+        variables=variables,
+        quantified_components=(
+            *(("validator_parameters",) if pair.parameters else ()),
+            "purpose_specific_ledger_input",
+        ),
+        argument_order=order,
+        arity=(len(pair.parameters) + (1 if normalized == "3" else 3 if pair.purpose == "spending" else 2)),
+        domain_expression=domain,
+        domain_assumptions=(
+            "The purpose-specific CardanoLedgerApiBlaster conversion supplies the compiled argument order.",
+            "The pinned ledger predicate constrains contexts to ledger-constructible values for the selected purpose.",
+            "A ledger-valid result cannot override a raw-uplc difference.",
+        ),
+        domain_witness=None,
+        observation=VALIDATOR_OBSERVATION,
+        non_vacuity={
+            "status": "solver_witness_required" if supported else "unsupported",
+            "method": "Blaster falsification of universal domain emptiness, with a recorded concrete model",
+            "predicate": domain,
+            "artifact_required": supported,
+        },
+        supported=supported,
+        unsupported_reason=reason,
+    )
+
+
+def validator_input_models(pair: ScriptPair) -> tuple[InputModel, InputModel]:
+    return raw_validator_input_model(pair), ledger_validator_input_model(pair)
+
+
+def validator_input_model(pair: ScriptPair) -> InputModel:
+    """Return the mandatory primary model retained for existing callers."""
+    return raw_validator_input_model(pair)
 
 
 def pure_integer_input_model() -> InputModel:
     variables = ({"name": "input", "type": "Integer"},)
-    domain = "True"
     return InputModel(
         kind="pure_integer",
+        profile=RAW_UPLC_PROFILE,
+        version="1",
         plutus_version="v3",
         purpose="pure",
         variables=variables,
         quantified_components=("function_argument",),
-        domain_expression=domain,
+        argument_order=("input",),
+        arity=1,
+        domain_expression="True",
         domain_assumptions=(
             "The integer argument is unrestricted.",
-            "Returned integer values are compared exactly; evaluation errors are observed separately from returned values.",
-            "Both programs receive the same argument and preparation fuel.",
+            "Returned integer values, evaluation failures, unexpected result types, and runtime-bound exhaustion are distinct observations.",
         ),
-        observation="returned_integer_or_error",
-        non_vacuity=_checked_non_vacuity(variables, domain),
+        domain_witness={"arguments": [{"name": "input", "value": 0}], "lean_expression": "0"},
+        observation=PURE_OBSERVATION,
+        non_vacuity={
+            "status": "generated_formal_witness",
+            "method": "Lean elaborates the witness input = 0 for the unrestricted domain",
+            "predicate": "True",
+            "artifact_required": True,
+        },
     )

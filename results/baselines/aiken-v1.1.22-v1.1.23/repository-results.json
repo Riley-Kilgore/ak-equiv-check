@@ -1,0 +1,266 @@
+{
+  "records": [
+    {
+      "classification_counts": {
+        "check_passed": 128,
+        "compile_passed": 128,
+        "compiler_changed_dependency_lock": 19,
+        "not_applicable": 109
+      },
+      "final_classification": "fail_closed",
+      "lane_counts": {
+        "check": 128,
+        "compile": 128,
+        "equivalence": 128
+      },
+      "revision": "8949565a9969278846ffefe30bc3b892029dd318",
+      "semantic_status_counts": {
+        "identical": 61
+      },
+      "source_id": "AIKEN_ACCEPTANCE",
+      "strict_pass": false,
+      "task_count": 384,
+      "validator_pairs": 61
+    },
+    {
+      "classification_counts": {
+        "check_passed": 1,
+        "compile_passed": 1
+      },
+      "final_classification": "passed",
+      "lane_counts": {
+        "check": 1,
+        "compile": 1
+      },
+      "revision": "06874926ec70747f3fc4e2b9364ee9e1393441cc",
+      "semantic_status_counts": {},
+      "source_id": "AIKEN_FUZZ",
+      "strict_pass": true,
+      "task_count": 2,
+      "validator_pairs": 0
+    },
+    {
+      "classification_counts": {
+        "benchmark_passed": 1,
+        "compile_passed": 1
+      },
+      "final_classification": "passed",
+      "lane_counts": {
+        "bench": 1,
+        "compile": 1
+      },
+      "revision": "9a7bca146277edaa413cf145ee4bb4063edb657d",
+      "semantic_status_counts": {},
+      "source_id": "AIKEN_SAMPLE",
+      "strict_pass": true,
+      "task_count": 2,
+      "validator_pairs": 0
+    },
+    {
+      "classification_counts": {
+        "check_passed": 1,
+        "compile_passed": 1,
+        "equivalence_passed": 1
+      },
+      "final_classification": "passed",
+      "lane_counts": {
+        "check": 1,
+        "compile": 1,
+        "equivalence": 1
+      },
+      "revision": "7d5cee54b2bb4eea211ae3bd806c7c39e5fd899d",
+      "semantic_status_counts": {
+        "identical": 2
+      },
+      "source_id": "AIKEN_STDLIB",
+      "strict_pass": true,
+      "task_count": 3,
+      "validator_pairs": 2
+    },
+    {
+      "classification_counts": {
+        "check_passed": 1,
+        "compile_passed": 1
+      },
+      "final_classification": "passed",
+      "lane_counts": {
+        "check": 1,
+        "compile": 1
+      },
+      "revision": "f1658cb806f63ff9bca59d33c258cbd22b6f3efb",
+      "semantic_status_counts": {},
+      "source_id": "EDU_CHECK",
+      "strict_pass": true,
+      "task_count": 2,
+      "validator_pairs": 0
+    },
+    {
+      "classification_counts": {
+        "compile_passed": 1,
+        "configuration_passed": 1,
+        "documentation_passed": 1
+      },
+      "final_classification": "passed",
+      "lane_counts": {
+        "compile": 1,
+        "config": 1,
+        "docs": 1
+      },
+      "revision": "03fb7c24ac8c5edb2d7f6282866d1a50748da0b4",
+      "semantic_status_counts": {},
+      "source_id": "EDU_CONSTANTS",
+      "strict_pass": true,
+      "task_count": 3,
+      "validator_pairs": 0
+    },
+    {
+      "classification_counts": {
+        "check_passed": 1,
+        "compile_passed": 1,
+        "equivalence_passed": 1
+      },
+      "final_classification": "passed",
+      "lane_counts": {
+        "check": 1,
+        "compile": 1,
+        "equivalence": 1
+      },
+      "revision": "c3142b9e3a1bd91cae94192fb21840110675e231",
+      "semantic_status_counts": {
+        "identical": 2
+      },
+      "source_id": "EDU_CONTROL",
+      "strict_pass": true,
+      "task_count": 3,
+      "validator_pairs": 2
+    },
+    {
+      "classification_counts": {
+        "check_passed": 1,
+        "compile_passed": 1,
+        "equivalence_passed": 1
+      },
+      "final_classification": "passed",
+      "lane_counts": {
+        "check": 1,
+        "compile": 1,
+        "equivalence": 1
+      },
+      "revision": "334c8eb589315802999f92bcc8ac303f45381d84",
+      "semantic_status_counts": {
+        "identical": 2
+      },
+      "source_id": "EDU_CUSTOM_TYPES",
+      "strict_pass": true,
+      "task_count": 3,
+      "validator_pairs": 2
+    },
+    {
+      "classification_counts": {
+        "check_passed": 1,
+        "compile_passed": 1,
+        "equivalence_passed": 1
+      },
+      "final_classification": "passed",
+      "lane_counts": {
+        "check": 1,
+        "compile": 1,
+        "equivalence": 1
+      },
+      "revision": "ae0827b32013ab21ae29bb1a55ccb51db7a53ace",
+      "semantic_status_counts": {
+        "identical": 2
+      },
+      "source_id": "EDU_FUNCTIONS",
+      "strict_pass": true,
+      "task_count": 3,
+      "validator_pairs": 2
+    },
+    {
+      "classification_counts": {
+        "check_passed": 1,
+        "compile_passed": 1,
+        "equivalence_passed": 1
+      },
+      "final_classification": "passed",
+      "lane_counts": {
+        "check": 1,
+        "compile": 1,
+        "equivalence": 1
+      },
+      "revision": "de8f8806450316404b21e69a3c393dbd449d14e7",
+      "semantic_status_counts": {
+        "identical": 6
+      },
+      "source_id": "EDU_MINTING",
+      "strict_pass": true,
+      "task_count": 3,
+      "validator_pairs": 6
+    },
+    {
+      "classification_counts": {
+        "check_passed": 1,
+        "compile_passed": 1,
+        "equivalence_passed": 1
+      },
+      "final_classification": "passed",
+      "lane_counts": {
+        "check": 1,
+        "compile": 1,
+        "equivalence": 1
+      },
+      "revision": "2a2427cbbc92ed8f8c443de260be9ae386771218",
+      "semantic_status_counts": {
+        "identical": 2
+      },
+      "source_id": "EDU_PRIMITIVES",
+      "strict_pass": true,
+      "task_count": 3,
+      "validator_pairs": 2
+    },
+    {
+      "classification_counts": {
+        "check_passed": 1,
+        "compile_passed": 1,
+        "equivalence_passed": 1
+      },
+      "final_classification": "passed",
+      "lane_counts": {
+        "check": 1,
+        "compile": 1,
+        "equivalence": 1
+      },
+      "revision": "36b12fbe2070c8d33e78981ed3cd090d9008f2a3",
+      "semantic_status_counts": {
+        "identical": 12
+      },
+      "source_id": "EDU_SPENDING",
+      "strict_pass": true,
+      "task_count": 3,
+      "validator_pairs": 12
+    },
+    {
+      "classification_counts": {
+        "check_passed": 1,
+        "compile_passed": 1,
+        "equivalence_passed": 1
+      },
+      "final_classification": "passed",
+      "lane_counts": {
+        "check": 1,
+        "compile": 1,
+        "equivalence": 1
+      },
+      "revision": "0c42c5f3814517479aa2fa95584337b27cd102cb",
+      "semantic_status_counts": {
+        "identical": 9
+      },
+      "source_id": "EDU_STAKING",
+      "strict_pass": true,
+      "task_count": 3,
+      "validator_pairs": 9
+    }
+  ],
+  "schema_version": 1,
+  "source_count": 13
+}

@@ -1,0 +1,13 @@
+diff --git a/lib/modules/primitives.ak b/lib/modules/primitives.ak
+index 2a20df1..01917aa 100644
+--- a/lib/modules/primitives.ak
++++ b/lib/modules/primitives.ak
+@@ -8,7 +8,7 @@ use cardano/transaction.{Mint, OutputReference, Spend}
+ use cardano/transaction/output_reference
+ use cardano/transaction/script_purpose
+ 
+-test integer() {
++pub fn integer() {
+   // let-bindings: https://aiken-lang.org/language-tour/variables-and-constants#variables--let-bindings
+   let i: Int = 1
+   let j = 2

@@ -1,0 +1,198 @@
+{
+  "schema_version": 2,
+  "compiler_baseline": {
+    "old": "v1.1.22",
+    "new": "v1.1.23"
+  },
+  "catalog": "aiken_mandatory_corpus.json",
+  "sources": [
+    {
+      "id": "AIKEN_ACCEPTANCE",
+      "url": "https://github.com/aiken-lang/aiken",
+      "revision": "8949565a9969278846ffefe30bc3b892029dd318",
+      "tag": "v1.1.23",
+      "targets": [
+        {
+          "id": "AIKEN_ACCEPTANCE_PACKAGES",
+          "package_glob": "examples/acceptance_tests/**/aiken.toml",
+          "lanes": ["compile", "check", "equivalence"],
+          "adapter": "AIKEN_ACCEPTANCE",
+          "source_type": "multi-package",
+          "equivalence_required": false
+        }
+      ]
+    },
+    {
+      "id": "AIKEN_STDLIB",
+      "url": "https://github.com/aiken-lang/stdlib",
+      "revision": "7d5cee54b2bb4eea211ae3bd806c7c39e5fd899d",
+      "tag": "v3.1.0",
+      "targets": [
+        {
+          "id": "AIKEN_STDLIB_ROOT",
+          "package_subpath": ".",
+          "lanes": ["compile", "check", "equivalence"],
+          "adapter": "AIKEN_STDLIB",
+          "source_type": "library-harness",
+          "feature_ids": ["MOD-USE", "LIST-MAP", "DATA-CONSTR"]
+        }
+      ]
+    },
+    {
+      "id": "AIKEN_FUZZ",
+      "url": "https://github.com/aiken-lang/fuzz",
+      "revision": "06874926ec70747f3fc4e2b9364ee9e1393441cc",
+      "tag": "v2.2.0",
+      "targets": [
+        {
+          "id": "AIKEN_FUZZ_ROOT",
+          "package_subpath": ".",
+          "lanes": ["compile", "check"],
+          "adapter": null,
+          "source_type": "check"
+        }
+      ]
+    },
+    {
+      "id": "AIKEN_SAMPLE",
+      "url": "https://github.com/aiken-lang/sample",
+      "revision": "9a7bca146277edaa413cf145ee4bb4063edb657d",
+      "targets": [
+        {
+          "id": "AIKEN_SAMPLE_ROOT",
+          "package_subpath": ".",
+          "lanes": ["compile", "bench"],
+          "adapter": null,
+          "source_type": "benchmark"
+        }
+      ]
+    },
+    {
+      "id": "EDU_PRIMITIVES",
+      "url": "https://github.com/ariady-putra-emurgo/aiken_primitive_types",
+      "revision": "2a2427cbbc92ed8f8c443de260be9ae386771218",
+      "targets": [
+        {
+          "id": "EDU_PRIMITIVES_ROOT",
+          "package_subpath": ".",
+          "lanes": ["compile", "check", "equivalence"],
+          "adapter": "EDU_PRIMITIVES",
+          "source_type": "library-harness",
+          "feature_ids": ["TYPE-PRIMITIVES"]
+        }
+      ]
+    },
+    {
+      "id": "EDU_CUSTOM_TYPES",
+      "url": "https://github.com/ariady-putra-emurgo/aiken_custom_types",
+      "revision": "334c8eb589315802999f92bcc8ac303f45381d84",
+      "targets": [
+        {
+          "id": "EDU_CUSTOM_TYPES_ROOT",
+          "package_subpath": ".",
+          "lanes": ["compile", "check", "equivalence"],
+          "adapter": "EDU_CUSTOM_TYPES",
+          "source_type": "library-harness"
+        }
+      ]
+    },
+    {
+      "id": "EDU_CONSTANTS",
+      "url": "https://github.com/ariady-putra-emurgo/aiken_const_showcase",
+      "revision": "03fb7c24ac8c5edb2d7f6282866d1a50748da0b4",
+      "targets": [
+        {
+          "id": "EDU_CONSTANTS_ROOT",
+          "package_subpath": ".",
+          "lanes": ["compile", "config", "docs"],
+          "adapter": null,
+          "source_type": "configuration"
+        }
+      ]
+    },
+    {
+      "id": "EDU_FUNCTIONS",
+      "url": "https://github.com/ariady-putra-emurgo/aiken_fn_showcase",
+      "revision": "ae0827b32013ab21ae29bb1a55ccb51db7a53ace",
+      "targets": [
+        {
+          "id": "EDU_FUNCTIONS_ROOT",
+          "package_subpath": ".",
+          "lanes": ["compile", "check", "equivalence"],
+          "adapter": "EDU_FUNCTIONS",
+          "source_type": "library-harness"
+        }
+      ]
+    },
+    {
+      "id": "EDU_CONTROL",
+      "url": "https://github.com/ariady-putra-emurgo/aiken_control_answer",
+      "revision": "c3142b9e3a1bd91cae94192fb21840110675e231",
+      "targets": [
+        {
+          "id": "EDU_CONTROL_ROOT",
+          "package_subpath": ".",
+          "lanes": ["compile", "check", "equivalence"],
+          "adapter": "EDU_CONTROL",
+          "source_type": "library-harness"
+        }
+      ]
+    },
+    {
+      "id": "EDU_MINTING",
+      "url": "https://github.com/ariady-putra-emurgo/aiken_minting_answer",
+      "revision": "de8f8806450316404b21e69a3c393dbd449d14e7",
+      "targets": [
+        {
+          "id": "EDU_MINTING_ROOT",
+          "package_subpath": ".",
+          "lanes": ["compile", "check", "equivalence"],
+          "adapter": null,
+          "source_type": "validator"
+        }
+      ]
+    },
+    {
+      "id": "EDU_SPENDING",
+      "url": "https://github.com/ariady-putra-emurgo/aiken_spending_validator",
+      "revision": "36b12fbe2070c8d33e78981ed3cd090d9008f2a3",
+      "targets": [
+        {
+          "id": "EDU_SPENDING_ROOT",
+          "package_subpath": ".",
+          "lanes": ["compile", "check", "equivalence"],
+          "adapter": null,
+          "source_type": "validator"
+        }
+      ]
+    },
+    {
+      "id": "EDU_STAKING",
+      "url": "https://github.com/ariady-putra-emurgo/aiken_staking_validator",
+      "revision": "0c42c5f3814517479aa2fa95584337b27cd102cb",
+      "targets": [
+        {
+          "id": "EDU_STAKING_ROOT",
+          "package_subpath": ".",
+          "lanes": ["compile", "check", "equivalence"],
+          "adapter": null,
+          "source_type": "validator"
+        }
+      ]
+    },
+    {
+      "id": "EDU_CHECK",
+      "url": "https://github.com/ariady-putra-emurgo/aiken_check_showcase",
+      "revision": "f1658cb806f63ff9bca59d33c258cbd22b6f3efb",
+      "targets": [
+        {
+          "id": "EDU_CHECK_ROOT",
+          "package_subpath": ".",
+          "lanes": ["compile", "check"],
+          "adapter": null,
+          "source_type": "check"
+        }
+      ]
+    }
+  ]
+}

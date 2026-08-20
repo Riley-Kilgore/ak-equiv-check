@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from equiv_checker.pairing import pair_validators
+from equiv_checker.pairing import discover_validators, pair_validators
 from helpers import IDENTITY_HEX, validator
 
 
@@ -117,6 +117,37 @@ class ValidatorPairingTests(unittest.TestCase):
             expected = hashlib.sha256(bytes.fromhex(IDENTITY_HEX)).hexdigest()
             self.assertEqual(result.pairs[0].old_script.sha256, expected)
             self.assertEqual(result.pairs[0].new_script.sha256, expected)
+
+    def test_named_handlers_and_else_keep_distinct_purposes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            rows = [
+                validator("module.multi.spend"),
+                validator("module.multi.mint"),
+                validator("module.multi.withdraw"),
+                validator("module.multi.publish"),
+                validator("module.multi.vote"),
+                validator("module.multi.propose"),
+                validator("module.multi.else"),
+            ]
+            blueprint = self._blueprint(root / "plutus.json", rows)
+            discovered = discover_validators(blueprint)
+            self.assertEqual(
+                {row.purpose for row in discovered},
+                {
+                    "spending",
+                    "minting",
+                    "rewarding",
+                    "certifying",
+                    "voting",
+                    "proposing",
+                    "fallback",
+                },
+            )
+            self.assertEqual(
+                sum(row.purpose == "fallback" for row in discovered),
+                1,
+            )
 
 
 if __name__ == "__main__":

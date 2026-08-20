@@ -7,8 +7,8 @@
     "source_hash_before", "source_hash_after", "source_unchanged",
     "dependency_lock_hash_before", "dependency_lock_hash_after",
     "dependency_lock_unchanged", "primary_exit_code", "build_timed_out",
-    "uplc_extraction_exit_code", "uplc_extraction_timed_out", "runs",
-    "negative_runs", "artifacts"
+    "uplc_extraction_exit_code", "uplc_extraction_timed_out",
+    "blueprint_present", "blueprint_malformed", "runs", "negative_runs", "artifacts"
   ],
   "properties": {
     "schema_version": {"const": 2},
@@ -38,6 +38,8 @@
     "build_timed_out": {"type": "boolean"},
     "uplc_extraction_exit_code": {"type": ["integer", "null"]},
     "uplc_extraction_timed_out": {"type": "boolean"},
+    "blueprint_present": {"type": "boolean"},
+    "blueprint_malformed": {"type": "boolean"},
     "runs": {"type": "array", "items": {"type": "object"}},
     "negative_runs": {"type": "array", "items": {"type": "object"}},
     "artifacts": {"type": "array", "items": {"type": "object"}}

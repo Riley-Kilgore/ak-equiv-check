@@ -15,7 +15,8 @@
           "compiler_pair", "old_script", "new_script", "purpose", "parameters",
           "covered_feature_ids", "input_model", "domain_assumptions",
           "semantic_contract", "excluded_observations", "blaster_dependencies",
-          "lean_version", "z3_version", "solver", "fuel", "timeouts", "command",
+          "lean_version", "z3_version", "solver", "runtime_step_bound",
+          "fuel_semantics", "timeouts", "command",
           "exit_code", "duration_seconds", "generated_lean_path",
           "generated_lean_sha256", "stdout_path", "stderr_path",
           "solver_input_path", "solver_input_sha256", "witness", "phase_results",
@@ -40,7 +41,8 @@
           "lean_version": {"type": "string"},
           "z3_version": {"type": "string"},
           "solver": {"type": "string"},
-          "fuel": {"type": "integer", "minimum": 1},
+          "runtime_step_bound": {"type": "integer", "minimum": 1},
+          "fuel_semantics": {"type": "string", "minLength": 1},
           "timeouts": {"type": "object"},
           "command": {"type": ["array", "null"], "items": {"type": "string"}},
           "exit_code": {"type": ["integer", "null"]},
@@ -60,7 +62,14 @@
           "new_signature": {"type": ["object", "null"]},
           "semantic_result": {"type": "boolean"},
           "compatibility_result": {"type": "boolean"},
-          "build_label": {"enum": ["old", "new"]}
+          "build_label": {"enum": ["old", "new"]},
+          "evidence_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "evidence_identity": {"type": "object"},
+          "attempt_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "attempt_sequence": {"type": "integer", "minimum": 1},
+          "execution_environment": {"type": "string", "minLength": 1},
+          "evaluator": {"type": ["object", "null"]},
+          "model_results": {"type": "object"}
         },
         "additionalProperties": false
       }
@@ -70,11 +79,22 @@
   "$defs": {
     "status": {
       "enum": [
-        "identical", "blaster_valid", "blaster_falsified_unreplayed",
-        "confirmed_non_equivalent", "blaster_inconclusive", "blaster_unsupported",
-        "blaster_timeout", "blaster_error", "old_build_failed", "new_build_failed",
-        "validator_missing_old", "validator_missing_new", "validator_signature_changed",
-        "feature_not_shared", "expected_negative_diagnostic", "not_applicable"
+        "identical", "equivalent_under_raw_model", "equivalent_under_ledger_model",
+        "off_ledger_difference", "bounded_equivalent", "blaster_valid",
+        "blaster_falsified_unreplayed", "confirmed_non_equivalent",
+        "blaster_inconclusive", "blaster_unsupported", "blaster_timeout",
+        "blaster_error", "raw_model_unsupported", "ledger_model_unsupported",
+        "fallback_purpose_unsupported", "model_unsupported",
+        "domain_non_vacuous_failed", "source_checkout_failed",
+        "source_revision_mismatch", "dependency_materialization_failed",
+        "missing_dependency_lock", "old_build_failed", "new_build_failed",
+        "old_uplc_extraction_failed", "new_uplc_extraction_failed",
+        "old_blueprint_missing", "new_blueprint_missing",
+        "old_blueprint_malformed", "new_blueprint_malformed",
+        "validator_missing_old", "validator_missing_new",
+        "validator_signature_changed", "adapter_failed", "lane_failed",
+        "contract_mismatch", "environment_mismatch", "missing_evidence",
+        "pending_evidence", "expected_negative_diagnostic", "not_applicable"
       ]
     }
   }

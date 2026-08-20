@@ -1,0 +1,7 @@
+{
+  "id": "AIKEN_ACCEPTANCE",
+  "version": 1,
+  "target_package": ".",
+  "mode": "multi-package-expansion",
+  "imported_source_modules": []
+}

@@ -1,0 +1,26 @@
+{
+  "baseline": "aiken-v1.1.22-v1.1.23",
+  "mandatory_corpus": {
+    "completed_tasks": 417,
+    "nonpassing_tasks": 19,
+    "reused_tasks": 417,
+    "run_id": "3e903d3f2023534445b2476f354248327ea04441e34c01043fde92821da8ee48",
+    "selected_tasks": 417,
+    "source_count": 13,
+    "strict_pass": false
+  },
+  "schema_version": 1,
+  "semantic_examples": {
+    "bounded_equivalent_validator": "bounded_equivalent",
+    "independent_replay_confirmed": true,
+    "non_equivalent_validator": "confirmed_non_equivalent"
+  },
+  "sentinel": {
+    "identical_pairs": 71,
+    "run_id": "aa840755ba33e8acbb4362a86c83b70b42ca0bf01c98bb58161f187d22c83719",
+    "shared_features_covered": 342,
+    "shared_features_missing": 0,
+    "strict_pass": true,
+    "validator_pairs": 71
+  }
+}

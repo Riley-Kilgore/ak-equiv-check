@@ -8,6 +8,19 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Mapping, Sequence
 
+_MINIMAL_ENVIRONMENT_KEYS = (
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "PATH",
+    "SSL_CERT_DIR",
+    "SSL_CERT_FILE",
+    "SYSTEMROOT",
+    "TEMP",
+    "TMP",
+    "TMPDIR",
+)
+
 
 @dataclass(frozen=True)
 class ProcessResult:
@@ -33,9 +46,26 @@ def run_process(
     timeout: float,
     *,
     environment: Mapping[str, str] | None = None,
+    inherit_environment: bool = True,
 ) -> ProcessResult:
     argv = [str(part) for part in command]
-    env = os.environ.copy()
+    if inherit_environment:
+        env = os.environ.copy()
+    else:
+        env = {
+            key: os.environ[key]
+            for key in _MINIMAL_ENVIRONMENT_KEYS
+            if key in os.environ
+        }
+        env.setdefault("PATH", os.defpath)
+        env.update(
+            {
+                "GCM_INTERACTIVE": "never",
+                "GIT_CONFIG_GLOBAL": os.devnull,
+                "GIT_CONFIG_NOSYSTEM": "1",
+                "GIT_TERMINAL_PROMPT": "0",
+            }
+        )
     env.update({"NO_COLOR": "1", "CLICOLOR": "0", "TERM": "dumb"})
     if environment:
         env.update(environment)

@@ -1,15 +1,38 @@
 {
+  "schema_version": 2,
   "old": {
     "release": "v1.1.22",
     "reported_version": "aiken v1.1.22+39d6b04",
-    "git_revision": "39d6b04",
-    "binary_sha256": "8d9ed739bc093d26bab80a2b0551d44546bf570c2650c97e0274455ce394bf89"
+    "git_revision": "39d6b049da08816aa51c9f8d3d73b9d292922f45",
+    "artifacts": {
+      "darwin-arm64": {
+        "url": "https://github.com/aiken-lang/aiken/releases/download/v1.1.22/aiken-aarch64-apple-darwin.tar.gz",
+        "archive_sha256": "9b271bc2efc991a4fd3ec7c24d36b1c654621670903a731fc68a8251443d1de8",
+        "binary_sha256": "8d9ed739bc093d26bab80a2b0551d44546bf570c2650c97e0274455ce394bf89"
+      },
+      "linux-x86_64": {
+        "url": "https://github.com/aiken-lang/aiken/releases/download/v1.1.22/aiken-x86_64-unknown-linux-musl.tar.gz",
+        "archive_sha256": "d443f9deab109fd75ae19e22f7dfce4cdd2f70b3f68c152a6a23db6bc1ea76e1",
+        "binary_sha256": "dd40c491163e06daccc48f22d6653b3857023473a0150470b24b3558b29a5cea"
+      }
+    }
   },
   "new": {
     "release": "v1.1.23",
     "reported_version": "aiken v1.1.23+8949565",
-    "git_revision": "8949565",
-    "binary_sha256": "240e3340d8b999711e092f19929adc713dba78be5c2dafc645ccc5d56acf6dab"
+    "git_revision": "8949565a9969278846ffefe30bc3b892029dd318",
+    "artifacts": {
+      "darwin-arm64": {
+        "url": "https://github.com/aiken-lang/aiken/releases/download/v1.1.23/aiken-aarch64-apple-darwin.tar.gz",
+        "archive_sha256": "6c03b072a599e1899accf7666c46f2d811d56d4605f9bb097aff38047ce8fa02",
+        "binary_sha256": "240e3340d8b999711e092f19929adc713dba78be5c2dafc645ccc5d56acf6dab"
+      },
+      "linux-x86_64": {
+        "url": "https://github.com/aiken-lang/aiken/releases/download/v1.1.23/aiken-x86_64-unknown-linux-musl.tar.gz",
+        "archive_sha256": "b98c4ccbada5e35f15ba417a52872aeaf0c65998aed77351769ce5fd2506b570",
+        "binary_sha256": "748b9d45785fbded901ed87475072b6d20ee259bb4588c72428c12a19e8902d3"
+      }
+    }
   },
   "selection_rule": "The old compiler is the immediately preceding published release, minimizing unrelated language drift while comparing v1.1.23 code generation."
 }

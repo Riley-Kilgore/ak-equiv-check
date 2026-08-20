@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aiken-equiv-checker"
-version = "0.1.0"
+version = "0.2.0"
 description = "Semantic equivalence checker for paired Aiken compiler builds"
 requires-python = ">=3.11"
 dependencies = ["jsonschema>=4.23,<5"]

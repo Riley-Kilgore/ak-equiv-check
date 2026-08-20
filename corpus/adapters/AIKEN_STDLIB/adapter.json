@@ -1,0 +1,11 @@
+{
+  "id": "AIKEN_STDLIB",
+  "version": 1,
+  "target_package": ".",
+  "mode": "library-harness",
+  "imported_source_modules": [
+    "aiken/collection/list",
+    "cardano/assets",
+    "cardano/transaction"
+  ]
+}

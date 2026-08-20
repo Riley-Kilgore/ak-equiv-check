@@ -95,13 +95,151 @@ class PackageRunnerTests(unittest.TestCase):
                 strict=True,
                 blaster_config=config,
                 backend=FakeBackend(config, "blaster_error"),
+                resume=True,
             )
             self.assertEqual(first["run_id"], second["run_id"])
-            self.assertEqual(set(first), set(second))
+            self.assertEqual(set(first) | {"reused"}, set(second))
+            self.assertTrue(second["reused"])
             result = json.loads(
                 (Path(second["output"]) / "pair-results.json").read_text()
             )
             self.assertNotIn("blaster_pending", json.dumps(result))
+
+    def test_logical_ids_are_stable_across_absolute_package_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            left_package = write_package(root / "left")
+            right_package = write_package(root / "right")
+            compilers = self._compilers(root, [validator()], [validator()])
+            config = fast_config(root)
+            summaries = [
+                compare_package(
+                    package,
+                    compilers,
+                    work_root=root / side / "work",
+                    strict=True,
+                    blaster_config=config,
+                    backend=FakeBackend(config, "blaster_error"),
+                )
+                for package, side in (
+                    (left_package, "left"),
+                    (right_package, "right"),
+                )
+            ]
+            self.assertEqual(summaries[0]["run_id"], summaries[1]["run_id"])
+            bundles = [Path(summary["output"]) for summary in summaries]
+            runs = [
+                json.loads((bundle / "run.json").read_text())
+                for bundle in bundles
+            ]
+            pairs = [
+                json.loads((bundle / "script-pairs.json").read_text())["records"][0]
+                for bundle in bundles
+            ]
+            evidence = [
+                json.loads((bundle / "pair-results.json").read_text())["records"][0]
+                for bundle in bundles
+            ]
+            self.assertEqual(
+                runs[0]["source"]["identity"],
+                runs[1]["source"]["identity"],
+            )
+            self.assertEqual(pairs[0]["pair_id"], pairs[1]["pair_id"])
+            self.assertEqual(evidence[0]["evidence_id"], evidence[1]["evidence_id"])
+
+    def test_resume_reuses_valid_pairs_and_reruns_only_corrupt_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = write_package(root)
+            old_rows = [
+                validator("module.first.mint", IDENTITY_HEX),
+                validator("module.second.mint", IDENTITY_HEX),
+            ]
+            new_rows = [
+                validator("module.first.mint", ZERO_HEX),
+                validator("module.second.mint", ZERO_HEX),
+            ]
+            compilers = self._compilers(root, old_rows, new_rows)
+            config = fast_config(root)
+            first_backend = FakeBackend(config, "blaster_valid")
+            first = compare_package(
+                package,
+                compilers,
+                work_root=root / "work",
+                strict=True,
+                blaster_config=config,
+                backend=first_backend,
+            )
+            bundle = Path(first["output"])
+            pair_ids = [
+                row["pair_id"]
+                for row in json.loads(
+                    (bundle / "pair-results.json").read_text()
+                )["records"]
+            ]
+            (bundle / "pairs" / pair_ids[0] / "result.json").write_text(
+                "{not-json",
+                encoding="utf-8",
+            )
+
+            resumed_backend = FakeBackend(config, "blaster_valid")
+            resumed = compare_package(
+                package,
+                compilers,
+                work_root=root / "work",
+                strict=True,
+                blaster_config=config,
+                backend=resumed_backend,
+                resume=True,
+            )
+            self.assertEqual(resumed["reused_pair_count"], 1)
+            self.assertEqual(resumed["reused_pair_ids"], [pair_ids[1]])
+            self.assertEqual(resumed_backend.calls, [pair_ids[0], pair_ids[0]])
+            self.assertEqual(resumed["schema_errors"], [])
+
+    def test_force_only_pair_preserves_unselected_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = write_package(root)
+            old_rows = [
+                validator("module.first.mint", IDENTITY_HEX),
+                validator("module.second.mint", IDENTITY_HEX),
+            ]
+            new_rows = [
+                validator("module.first.mint", ZERO_HEX),
+                validator("module.second.mint", ZERO_HEX),
+            ]
+            compilers = self._compilers(root, old_rows, new_rows)
+            config = fast_config(root)
+            first = compare_package(
+                package,
+                compilers,
+                work_root=root / "work",
+                strict=True,
+                blaster_config=config,
+                backend=FakeBackend(config, "blaster_valid"),
+            )
+            records = json.loads(
+                (Path(first["output"]) / "pair-results.json").read_text()
+            )["records"]
+            selected = records[0]["pair_id"]
+            unselected = records[1]["pair_id"]
+
+            backend = FakeBackend(config, "blaster_valid")
+            partial = compare_package(
+                package,
+                compilers,
+                work_root=root / "work",
+                strict=True,
+                blaster_config=config,
+                backend=backend,
+                force=True,
+                only_pairs={selected},
+            )
+            self.assertEqual(partial["selected_pair_ids"], [selected])
+            self.assertEqual(partial["reused_pair_ids"], [unselected])
+            self.assertEqual(backend.calls, [selected, selected])
+            self.assertEqual(partial["counts"]["validators_paired"], 2)
 
     def test_dynamic_validator_counts_have_no_fixed_schema_constant(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -195,6 +333,65 @@ class PackageRunnerTests(unittest.TestCase):
             self.assertFalse(summary["strict_pass"])
             self.assertEqual(summary["schema_errors"], [])
             self.assertEqual(summary["status_counts"], {"new_build_failed": 1})
+
+    def test_uplc_extraction_failure_has_its_own_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = write_package(root)
+            old = write_fake_compiler(
+                root / "old-aiken", [validator()], uplc_exit_code=17
+            )
+            new = write_fake_compiler(root / "new-aiken", [validator()])
+            compilers = compiler_pair(
+                old_aiken=old,
+                new_aiken=new,
+                old_revision="old-revision",
+                new_revision="new-revision",
+            )
+            config = fast_config(root)
+            summary = compare_package(
+                package,
+                compilers,
+                work_root=root / "work",
+                strict=True,
+                blaster_config=config,
+                backend=FakeBackend(config, "blaster_valid"),
+            )
+            self.assertFalse(summary["strict_pass"])
+            self.assertEqual(
+                summary["status_counts"], {"old_uplc_extraction_failed": 1}
+            )
+
+    def test_missing_and_malformed_blueprints_are_distinct(self) -> None:
+        for mode, status in (
+            ("missing", "old_blueprint_missing"),
+            ("malformed", "old_blueprint_malformed"),
+        ):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                package = write_package(root)
+                old = write_fake_compiler(
+                    root / "old-aiken", [validator()], blueprint_mode=mode
+                )
+                new = write_fake_compiler(root / "new-aiken", [validator()])
+                compilers = compiler_pair(
+                    old_aiken=old,
+                    new_aiken=new,
+                    old_revision="old-revision",
+                    new_revision="new-revision",
+                )
+                config = fast_config(root)
+                summary = compare_package(
+                    package,
+                    compilers,
+                    work_root=root / "work",
+                    strict=True,
+                    blaster_config=config,
+                    backend=FakeBackend(config, "blaster_valid"),
+                )
+                self.assertFalse(summary["strict_pass"])
+                self.assertEqual(summary["status_counts"], {status: 1})
+
 
     def test_missing_lock_is_explicit_strict_reproducibility_gap(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

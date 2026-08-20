@@ -1,0 +1,7 @@
+{
+  "id": "EDU_CUSTOM_TYPES",
+  "version": 2,
+  "target_package": ".",
+  "mode": "library-harness",
+  "imported_source_modules": ["custom_types"]
+}

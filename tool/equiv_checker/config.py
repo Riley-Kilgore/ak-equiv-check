@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from .models import BlasterConfig, Timeouts
+from .models import BlasterConfig, EvaluatorConfig, Timeouts
 from .process import run_process
 
 
@@ -84,6 +84,38 @@ def sha256_tree(root: Path) -> str:
     return digest.hexdigest()
 
 
+def platform_key() -> str:
+    return f"{platform.system().lower()}-{platform.machine().lower()}"
+
+
+def _configured_binary_hash(configured: dict[str, Any]) -> str:
+    artifacts = configured.get("artifacts")
+    if isinstance(artifacts, dict):
+        key = platform_key()
+        artifact = artifacts.get(key)
+        if not isinstance(artifact, dict) or not isinstance(
+            artifact.get("binary_sha256"), str
+        ):
+            raise ValueError(f"no pinned compiler artifact for {key}")
+        return str(artifact["binary_sha256"])
+    expected = configured.get("binary_sha256")
+    if not isinstance(expected, str):
+        raise ValueError("compiler binary hash is missing")
+    return expected
+
+
+def _known_binary_hashes(configured: dict[str, Any]) -> set[str]:
+    artifacts = configured.get("artifacts")
+    if isinstance(artifacts, dict):
+        return {
+            str(artifact["binary_sha256"])
+            for artifact in artifacts.values()
+            if isinstance(artifact, dict)
+            and isinstance(artifact.get("binary_sha256"), str)
+        }
+    return {_configured_binary_hash(configured)}
+
+
 def _installed_aiken(label: str, release: str) -> Path:
     override = os.getenv(f"AIKEN_{label.upper()}")
     if override:
@@ -106,34 +138,40 @@ def _compiler(
     executable_override: Path | None,
     revision_override: str | None,
 ) -> Compiler:
-    is_default = executable_override is None
+    uses_installed_default = executable_override is None
     executable = (
         _installed_aiken(label, configured["release"])
-        if is_default
+        if uses_installed_default
         else executable_override.expanduser().resolve()
     )
     if not executable.is_file():
         raise FileNotFoundError(f"{label} compiler does not exist: {executable}")
     actual_hash = sha256_file(executable)
-    expected_hash = configured.get("binary_sha256") if is_default else None
-    if expected_hash and actual_hash != expected_hash:
+    expected_hash = _configured_binary_hash(configured)
+    if uses_installed_default and actual_hash != expected_hash:
         raise RuntimeError(
             f"{label} compiler hash mismatch: expected {expected_hash}, got {actual_hash}"
         )
+    is_baseline = actual_hash in _known_binary_hashes(configured)
     version = run_process([executable, "--version"], REPOSITORY_ROOT, 30.0)
     if version.timed_out or version.exit_code != 0:
         detail = version.stderr.strip() or version.stdout.strip() or "no diagnostic"
         raise RuntimeError(f"{label} compiler --version failed: {detail}")
     reported_version = (version.stdout or version.stderr).strip().splitlines()[0]
+    if is_baseline and reported_version != configured["reported_version"]:
+        raise RuntimeError(
+            f"{label} compiler version mismatch: expected "
+            f"{configured['reported_version']}, got {reported_version}"
+        )
     return Compiler(
         label=label,
-        release=configured["release"] if is_default else "custom",
+        release=configured["release"] if is_baseline else "custom",
         reported_version=reported_version,
         git_revision=(
             revision_override
             if revision_override is not None
             else configured.get("git_revision")
-            if is_default
+            if is_baseline
             else None
         ),
         binary_sha256=actual_hash,
@@ -155,21 +193,74 @@ def compiler_pair(
     )
 
 
-def load_blaster_config(path: Path = BLASTER_CONFIG_PATH) -> BlasterConfig:
+def load_blaster_config(
+    path: Path = BLASTER_CONFIG_PATH,
+    *,
+    evaluator_executable: Path | None = None,
+) -> BlasterConfig:
     value = load_json(path)
     backend_root = Path(value["backend_root"]).expanduser()
     if not backend_root.is_absolute():
         backend_root = (REPOSITORY_ROOT / backend_root).resolve()
-    fuel = value.get("fuel")
-    if not isinstance(fuel, int) or fuel <= 0:
-        raise ValueError("Blaster preparation fuel must be a positive integer")
+    runtime_step_bound = value.get("semantic_runtime_step_bound")
+    if not isinstance(runtime_step_bound, int) or runtime_step_bound <= 0:
+        raise ValueError("semantic runtime step bound must be a positive integer")
+    evaluator_value = value.get("evaluator")
+    evaluator: EvaluatorConfig | None = None
+    if evaluator_value is not None:
+        if not isinstance(evaluator_value, dict):
+            raise ValueError("evaluator configuration must be an object")
+        evaluator_executable = (
+            _installed_aiken("new", str(evaluator_value["release"]))
+            if evaluator_executable is None
+            else evaluator_executable.expanduser().resolve()
+        )
+        evaluator_hash = sha256_file(evaluator_executable)
+        expected_evaluator_hash = _configured_binary_hash(evaluator_value)
+        if evaluator_hash != expected_evaluator_hash:
+            raise RuntimeError(
+                "evaluator binary hash mismatch: "
+                f"expected {expected_evaluator_hash}, got {evaluator_hash}"
+            )
+        evaluator = EvaluatorConfig(
+            name=str(evaluator_value["name"]),
+            version=str(evaluator_value["version"]),
+            revision=str(evaluator_value["revision"]),
+            binary_sha256=evaluator_hash,
+            executable=evaluator_executable,
+            evaluation_limits=dict(evaluator_value["evaluation_limits"]),
+        )
+    solver_artifacts = value.get("solver_artifacts")
+    platform_key_value = platform_key()
+    if (
+        not isinstance(solver_artifacts, dict)
+        or platform_key_value not in solver_artifacts
+    ):
+        raise ValueError(f"no pinned solver artifact for {platform_key_value}")
+    solver_artifact = solver_artifacts[platform_key_value]
+    solver_executable = Path(str(solver_artifact["path"])).expanduser()
+    if not solver_executable.is_absolute():
+        solver_executable = (REPOSITORY_ROOT / solver_executable).resolve()
+    if not solver_executable.is_file():
+        raise FileNotFoundError(
+            f"pinned solver executable is missing: {solver_executable}"
+        )
+    solver_hash = sha256_file(solver_executable)
+    if solver_hash != solver_artifact["binary_sha256"]:
+        raise RuntimeError(
+            "solver binary hash mismatch: "
+            f"expected {solver_artifact['binary_sha256']}, got {solver_hash}"
+        )
     return BlasterConfig(
         backend_root=backend_root,
         revisions=dict(value["revisions"]),
         lean_version=str(value["lean_version"]),
         z3_version=str(value["z3_version"]),
         solver=str(value.get("solver", "z3")),
-        fuel=fuel,
+        solver_executable=solver_executable,
+        solver_binary_sha256=solver_hash,
+        runtime_step_bound=runtime_step_bound,
         timeouts=Timeouts.from_dict(value.get("timeouts", {})),
         random_seed=int(value.get("random_seed", 1)),
+        evaluator=evaluator,
     )

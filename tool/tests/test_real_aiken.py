@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -14,16 +13,9 @@ from equiv_checker.runner import compare_package
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
-@unittest.skipUnless(shutil.which("aiken"), "aiken executable is required")
 class RealAikenGoldenTests(unittest.TestCase):
-    def test_parameterized_manifest_free_package_uses_generic_path(self) -> None:
-        executable = Path(shutil.which("aiken") or "")
-        compilers = compiler_pair(
-            old_aiken=executable,
-            new_aiken=executable,
-            old_revision="real-golden",
-            new_revision="real-golden",
-        )
+    def test_distinct_pinned_compilers_build_and_pair_same_package(self) -> None:
+        compilers = compiler_pair()
         package = Path(__file__).parent / "fixtures" / "aiken-package"
         with tempfile.TemporaryDirectory() as temporary:
             summary = compare_package(
@@ -31,7 +23,9 @@ class RealAikenGoldenTests(unittest.TestCase):
                 compilers,
                 work_root=Path(temporary),
                 strict=True,
-                blaster_config=load_blaster_config(),
+                blaster_config=load_blaster_config(
+                    evaluator_executable=compilers[1].executable
+                ),
             )
             self.assertTrue(summary["strict_pass"])
             self.assertEqual(summary["counts"]["validators_paired"], 2)

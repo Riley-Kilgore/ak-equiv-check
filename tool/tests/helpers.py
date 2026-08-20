@@ -50,6 +50,8 @@ def write_fake_compiler(
     version: str = "aiken v9.9.9+same",
     build_exit_code: int = 0,
     sleep_seconds: float = 0.0,
+    uplc_exit_code: int = 0,
+    blueprint_mode: str = "valid",
 ) -> Path:
     payload = json.dumps({"preamble": {}, "validators": validators, "definitions": {}})
     source = f'''#!/usr/bin/env python3
@@ -63,6 +65,8 @@ VERSION = {version!r}
 BLUEPRINT = json.loads({payload!r})
 BUILD_EXIT = {build_exit_code}
 SLEEP = {sleep_seconds}
+UPLC_EXIT = {uplc_exit_code}
+BLUEPRINT_MODE = {blueprint_mode!r}
 
 if "--version" in sys.argv:
     print(VERSION)
@@ -73,9 +77,15 @@ if len(sys.argv) > 1 and sys.argv[1] == "build":
     if BUILD_EXIT:
         print("fake build failed", file=sys.stderr)
         raise SystemExit(BUILD_EXIT)
-    out = sys.argv[sys.argv.index("--out") + 1] if "--out" in sys.argv else "plutus.json"
-    pathlib.Path(out).write_text(json.dumps(BLUEPRINT))
-    if "--uplc" in sys.argv:
+    out = pathlib.Path(sys.argv[sys.argv.index("--out") + 1] if "--out" in sys.argv else "plutus.json")
+    if "--uplc" in sys.argv and UPLC_EXIT:
+        print("fake UPLC extraction failed", file=sys.stderr)
+        raise SystemExit(UPLC_EXIT)
+    if BLUEPRINT_MODE == "valid":
+        out.write_text(json.dumps(BLUEPRINT))
+    elif BLUEPRINT_MODE == "malformed":
+        out.write_text("{{not-json")
+    if "--uplc" in sys.argv and BLUEPRINT_MODE == "valid":
         for row in BLUEPRINT["validators"]:
             artifact = pathlib.Path("artifacts") / (row["title"] + ".uplc")
             artifact.parent.mkdir(parents=True, exist_ok=True)
@@ -138,9 +148,11 @@ def fast_config(root: Path) -> BlasterConfig:
             "CardanoLedgerApiBlaster": "3" * 40,
         },
         lean_version="4.24.0",
-        z3_version="4.15.4",
+        z3_version="4.15.2",
         solver="z3",
-        fuel=100,
+        solver_executable=Path("/usr/bin/false"),
+        solver_binary_sha256="0" * 64,
+        runtime_step_bound=100,
         timeouts=Timeouts(
             aiken_build=2,
             uplc_extraction=2,

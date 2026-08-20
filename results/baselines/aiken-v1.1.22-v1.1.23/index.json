@@ -1,0 +1,34 @@
+{
+  "artifacts": [
+    {
+      "path": "environment.json",
+      "sha256": "d2a1cb16459a016acfb8bfe7c686f579bf555ec63ad7731b57701a4c4bb94695"
+    },
+    {
+      "path": "feature-coverage.json",
+      "sha256": "025a355f4f22f240531b7ade7d1cbbd9f5db0c7436b42a4bb6040b08f95a4f46"
+    },
+    {
+      "path": "manifest.lock.json",
+      "sha256": "e256ebbcdd1ff28e66abacfe7b408bf3d005173a80e587e33eb16c467189874e"
+    },
+    {
+      "path": "repository-results.json",
+      "sha256": "de2d977125d0c7d9f1050a65281181c0e4467b9fee6aa7669b296751e3a0fc31"
+    },
+    {
+      "path": "semantic-examples.json",
+      "sha256": "be79a8dd84a9ae704b2804c70b384a467a176405111c0b10cb16940a5c240737"
+    },
+    {
+      "path": "summary.json",
+      "sha256": "9cc43467ed44ea4adc974e19c5a86080a24b3ee03f7682912e6c05b1ce3f3a10"
+    },
+    {
+      "path": "summary.md",
+      "sha256": "0259f2ac89b9c8d820a49feb48014279ec355658132b0096bf42754abb40c435"
+    }
+  ],
+  "baseline": "aiken-v1.1.22-v1.1.23",
+  "schema_version": 1
+}

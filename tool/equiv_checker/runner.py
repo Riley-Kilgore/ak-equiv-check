@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import tomllib
 from concurrent.futures import ThreadPoolExecutor
@@ -22,6 +23,7 @@ from .config import (
     load_blaster_config,
     load_json,
     package_name,
+    platform_key,
     sha256_file,
 )
 from .models import (
@@ -35,12 +37,12 @@ from .models import (
 )
 from .pairing import PairingResult, canonical_json, pair_validators, stable_hash
 from .pipeline import _capture_negative_cases, prove_reachability, run_lanes
-from .process import ProcessResult, run_process, write_process_logs
 from .semantics import (
     EQUIVALENCE_FORMULA,
     EXCLUDED_FROM_SEMANTIC_VERDICT,
-    validator_input_model,
+    validator_input_models,
 )
+from .process import ProcessResult, run_process, write_process_logs
 
 
 CHECKER_SCHEMA_VERSION = 2
@@ -78,6 +80,37 @@ def hash_package_tree(package: Path, *, include_lock: bool) -> str:
         digest.update(path.read_bytes())
         digest.update(b"\0")
     return digest.hexdigest()
+def checker_implementation_sha256() -> str:
+    digest = hashlib.sha256()
+    package_root = Path(__file__).resolve().parent
+    filenames = (
+        "blaster.py",
+        "census.py",
+        "config.py",
+        "corpus.py",
+        "models.py",
+        "pairing.py",
+        "pipeline.py",
+        "process.py",
+        "runner.py",
+        "semantics.py",
+    )
+    for filename in filenames:
+        path = package_root / filename
+        digest.update(filename.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    schema_root = package_root.parent / "schemas"
+    for path in sorted(schema_root.glob("*.json")):
+        relative = f"schemas/{path.name}"
+        digest.update(relative.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
 
 
 def _copy_package(source: Path, destination: Path) -> None:
@@ -101,26 +134,62 @@ def _git(package: Path, *arguments: str) -> ProcessResult:
     return run_process(["git", "-C", package, *arguments], package, 30.0)
 
 
-def source_repository_metadata(package: Path) -> dict[str, Any]:
+def source_repository_metadata(
+    package: Path,
+    *,
+    source_hash: str | None = None,
+    dependency_lock_hash: str | None = None,
+    adapter_hash: str | None = None,
+) -> dict[str, Any]:
+    source_hash = source_hash or hash_package_tree(package, include_lock=False)
+    lock_path = package / "aiken.lock"
+    dependency_lock_hash = (
+        dependency_lock_hash
+        if dependency_lock_hash is not None
+        else sha256_file(lock_path)
+        if lock_path.is_file()
+        else None
+    )
     root_result = _git(package, "rev-parse", "--show-toplevel")
     if root_result.exit_code != 0:
+        identity_fields = {
+            "canonical_repository_url": "local-content",
+            "revision": None,
+            "package_subpath": ".",
+            "source_hash": source_hash,
+            "dependency_lock_hash": dependency_lock_hash,
+            "adapter_hash": adapter_hash,
+        }
         return {
             "kind": "local_directory",
             "repository_root": None,
             "commit": None,
             "dirty": None,
             "remote": None,
-            "package_path": str(package.resolve()),
-            "identity": f"local:{package.resolve()}",
+            "package_path": ".",
+            "identity_fields": identity_fields,
+            "identity": stable_hash(identity_fields),
         }
     repository_root = Path(root_result.stdout.strip()).resolve()
     commit_result = _git(package, "rev-parse", "HEAD")
     status_result = _git(package, "status", "--porcelain", "--untracked-files=normal")
     remote_result = _git(package, "config", "--get", "remote.origin.url")
-    relative = package.resolve().relative_to(repository_root).as_posix()
+    relative = package.resolve().relative_to(repository_root).as_posix() or "."
     commit = commit_result.stdout.strip() if commit_result.exit_code == 0 else None
     remote = remote_result.stdout.strip() if remote_result.exit_code == 0 else None
-    identity = f"{remote or repository_root}@{commit or 'unknown'}:{relative or '.'}"
+    canonical_remote = remote or "local-git"
+    match = re.fullmatch(r"git@github\\.com:(.+?)(?:\\.git)?", canonical_remote)
+    if match:
+        canonical_remote = f"https://github.com/{match.group(1)}"
+    canonical_remote = canonical_remote.removesuffix(".git").rstrip("/")
+    identity_fields = {
+        "canonical_repository_url": canonical_remote,
+        "revision": commit,
+        "package_subpath": relative,
+        "source_hash": source_hash,
+        "dependency_lock_hash": dependency_lock_hash,
+        "adapter_hash": adapter_hash,
+    }
     return {
         "kind": "git",
         "repository_root": str(repository_root),
@@ -129,8 +198,9 @@ def source_repository_metadata(package: Path) -> dict[str, Any]:
         if status_result.exit_code == 0
         else None,
         "remote": remote,
-        "package_path": relative or ".",
-        "identity": identity,
+        "package_path": relative,
+        "identity_fields": identity_fields,
+        "identity": stable_hash(identity_fields),
     }
 
 
@@ -164,6 +234,7 @@ def _process_record(
         "stdout_path": stdout_path.relative_to(bundle_root).as_posix(),
         "stderr_path": stderr_path.relative_to(bundle_root).as_posix(),
         "timeout_seconds": timeout_seconds,
+        "environment_inherited": False,
     }
 
 
@@ -184,7 +255,12 @@ def _build_one(
     )
     logs = bundle_root / "logs"
     build_command = [str(compiler.executable), "build", "--out", "plutus.json"]
-    build = run_process(build_command, source, config.timeouts.aiken_build)
+    build = run_process(
+        build_command,
+        source,
+        config.timeouts.aiken_build,
+        inherit_environment=False,
+    )
     build_record = _process_record(
         build,
         bundle_root,
@@ -194,6 +270,7 @@ def _build_one(
     )
     extraction: ProcessResult | None = None
     extraction_record: dict[str, Any] | None = None
+    extraction_records: list[dict[str, Any]] = []
     if not build.timed_out and build.exit_code == 0:
         extraction_command = [
             str(compiler.executable),
@@ -203,7 +280,10 @@ def _build_one(
             "--uplc",
         ]
         extraction = run_process(
-            extraction_command, source, config.timeouts.uplc_extraction
+            extraction_command,
+            source,
+            config.timeouts.uplc_extraction,
+            inherit_environment=False,
         )
         extraction_record = _process_record(
             extraction,
@@ -212,6 +292,7 @@ def _build_one(
             logs / f"uplc-extraction-{compiler.label}.stderr.log",
             config.timeouts.uplc_extraction,
         )
+        extraction_records.append(extraction_record)
 
     artifacts: list[dict[str, Any]] = []
     raw_root = compiler_root / "raw" / "silent"
@@ -221,6 +302,66 @@ def _build_one(
         blueprint.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(blueprint_source, blueprint)
         artifacts.append(_artifact(blueprint, compiler_root, "plutus_blueprint"))
+    blueprint_present = blueprint_source.is_file()
+    blueprint_malformed = False
+    blueprint_value: dict[str, Any] | None = None
+    if blueprint_present:
+        try:
+            blueprint_value = json.loads(blueprint_source.read_text(encoding="utf-8"))
+            blueprint_malformed = not isinstance(blueprint_value.get("validators"), list)
+        except (json.JSONDecodeError, OSError, AttributeError):
+            blueprint_malformed = True
+    extraction_exit_code = extraction.exit_code if extraction else None
+    extraction_timed_out = extraction.timed_out if extraction else False
+    if (
+        extraction is not None
+        and extraction.exit_code != 0
+        and not extraction.timed_out
+        and not blueprint_malformed
+        and blueprint_value is not None
+    ):
+        validators = blueprint_value["validators"]
+        precise_success = bool(validators)
+        extraction_inputs = compiler_root / "extraction-inputs"
+        extraction_inputs.mkdir(parents=True, exist_ok=True)
+        for index, validator in enumerate(validators):
+            title = validator.get("title")
+            compiled_code = validator.get("compiledCode")
+            if not isinstance(title, str) or not isinstance(compiled_code, str):
+                precise_success = False
+                continue
+            title_hash = hashlib.sha256(title.encode("utf-8")).hexdigest()[:16]
+            encoded = extraction_inputs / f"{index:03d}-{title_hash}.cborhex"
+            encoded.write_text(compiled_code + "\n", encoding="ascii")
+            precise = run_process(
+                [
+                    str(compiler.executable),
+                    "uplc",
+                    "decode",
+                    "-c",
+                    "--hex",
+                    str(encoded),
+                ],
+                source,
+                config.timeouts.uplc_extraction,
+            )
+            precise_record = _process_record(
+                precise,
+                bundle_root,
+                logs / f"uplc-extraction-{compiler.label}-{index:03d}.stdout.log",
+                logs / f"uplc-extraction-{compiler.label}-{index:03d}.stderr.log",
+                config.timeouts.uplc_extraction,
+            )
+            extraction_records.append(precise_record)
+            if precise.timed_out or precise.exit_code != 0:
+                precise_success = False
+                extraction_timed_out = extraction_timed_out or precise.timed_out
+                continue
+            destination = raw_root / "uplc" / f"{index:03d}-{title_hash}.uplc"
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text(precise.stdout, encoding="utf-8")
+            artifacts.append(_artifact(destination, compiler_root, "textual_uplc"))
+        extraction_exit_code = 0 if precise_success else 1
     artifact_root = source / "artifacts"
     if artifact_root.is_dir():
         for uplc in sorted(artifact_root.rglob("*.uplc")):
@@ -253,9 +394,11 @@ def _build_one(
         "dependency_lock_unchanged": lock_before == lock_after,
         "primary_exit_code": build.exit_code,
         "build_timed_out": build.timed_out,
-        "uplc_extraction_exit_code": extraction.exit_code if extraction else None,
-        "uplc_extraction_timed_out": extraction.timed_out if extraction else False,
-        "runs": [build_record] + ([extraction_record] if extraction_record else []),
+        "uplc_extraction_exit_code": extraction_exit_code,
+        "uplc_extraction_timed_out": extraction_timed_out,
+        "blueprint_present": blueprint_present,
+        "blueprint_malformed": blueprint_malformed,
+        "runs": [build_record, *extraction_records],
         "negative_runs": [],
         "artifacts": sorted(artifacts, key=lambda row: row["path"]),
     }
@@ -283,15 +426,40 @@ def _build_failure_results(
     config: BlasterConfig,
 ) -> list[dict[str, Any]]:
     results = []
-    for label, status in (("old", "old_build_failed"), ("new", "new_build_failed")):
-        if (
-            builds[label]["primary_exit_code"] == 0
-            and not builds[label]["build_timed_out"]
+    for label in ("old", "new"):
+        build = builds[label]
+        stage = "build"
+        if build["build_timed_out"] or build["primary_exit_code"] != 0:
+            status = f"{label}_build_failed"
+            detail = "Aiken build timed out" if build["build_timed_out"] else "Aiken build failed"
+            run = build["runs"][0]
+        elif (
+            build["uplc_extraction_timed_out"]
+            or build["uplc_extraction_exit_code"] != 0
         ):
+            status = f"{label}_uplc_extraction_failed"
+            detail = (
+                "UPLC extraction timed out"
+                if build["uplc_extraction_timed_out"]
+                else "UPLC extraction failed"
+            )
+            stage = "uplc-extraction"
+            run = build["runs"][-1]
+        elif not build["blueprint_present"]:
+            status = f"{label}_blueprint_missing"
+            detail = "successful build and UPLC extraction produced no plutus.json"
+            stage = "blueprint"
+            run = build["runs"][-1]
+        elif build["blueprint_malformed"]:
+            status = f"{label}_blueprint_malformed"
+            detail = "plutus.json is invalid or has no validators array"
+            stage = "blueprint"
+            run = build["runs"][-1]
+        else:
             continue
         results.append(
             {
-                "pair_id": f"package-{label}-build",
+                "pair_id": f"package-{label}-{stage}",
                 "source_identity": source,
                 "validator_identity": None,
                 "compiler_pair": compilers,
@@ -308,24 +476,23 @@ def _build_failure_results(
                 "lean_version": config.lean_version,
                 "z3_version": config.z3_version,
                 "solver": config.solver,
-                "fuel": config.fuel,
+                "runtime_step_bound": config.runtime_step_bound,
+                "fuel_semantics": "maximum CEK transitions per modeled input",
                 "timeouts": asdict(config.timeouts),
                 "status": status,
-                "command": builds[label]["runs"][0]["command"],
-                "exit_code": builds[label]["primary_exit_code"],
-                "duration_seconds": builds[label]["runs"][0]["duration_seconds"],
+                "command": run["command"],
+                "exit_code": run["exit_code"],
+                "duration_seconds": run["duration_seconds"],
                 "generated_lean_path": None,
                 "generated_lean_sha256": None,
-                "stdout_path": builds[label]["runs"][0]["stdout_path"],
-                "stderr_path": builds[label]["runs"][0]["stderr_path"],
+                "stdout_path": run["stdout_path"],
+                "stderr_path": run["stderr_path"],
                 "solver_input_path": None,
                 "solver_input_sha256": None,
                 "witness": None,
                 "phase_results": [],
                 "counterexample_replay": None,
-                "error": "Aiken build timed out"
-                if builds[label]["build_timed_out"]
-                else "Aiken build failed",
+                "error": detail,
                 "cost_and_trace": {
                     "included_in_semantic_verdict": False,
                     "cpu": None,
@@ -349,12 +516,38 @@ def _pair_result(
     source: dict[str, Any],
     compilers: dict[str, dict[str, Any]],
     config: BlasterConfig,
+    attempt_sequence: int = 1,
 ) -> dict[str, Any]:
     if status not in FINAL_STATUSES:
         raise ValueError(f"unknown pair result status: {status}")
     backend = backend_result.to_dict() if backend_result else {}
+    evidence_fields = {
+        "script_pair_identity": pair.pair_id,
+        "old_script_hash": pair.old_script.sha256,
+        "new_script_hash": pair.new_script.sha256,
+        "input_model_version": input_model.profile,
+        "domain_hash": stable_hash(input_model.domain_expression),
+        "observation_hash": stable_hash(input_model.observation),
+        "blaster_revisions": dict(sorted(config.revisions.items())),
+        "lean_version": config.lean_version,
+        "z3_version": config.z3_version,
+        "runtime_step_bound": config.runtime_step_bound,
+    }
+    evidence_id = stable_hash(evidence_fields)
+    attempt_fields = {
+        "evidence_id": evidence_id,
+        "timeouts": asdict(config.timeouts),
+        "runner_schema_version": CHECKER_SCHEMA_VERSION,
+        "execution_environment": platform_key(),
+        "attempt_sequence": attempt_sequence,
+    }
     return {
         "pair_id": pair.pair_id,
+        "evidence_id": evidence_id,
+        "evidence_identity": evidence_fields,
+        "attempt_id": stable_hash(attempt_fields),
+        "attempt_sequence": attempt_sequence,
+        "execution_environment": platform_key(),
         "source_identity": source,
         "validator_identity": pair.validator_identity,
         "compiler_pair": compilers,
@@ -371,8 +564,10 @@ def _pair_result(
         "lean_version": config.lean_version,
         "z3_version": config.z3_version,
         "solver": config.solver,
-        "fuel": config.fuel,
+        "runtime_step_bound": config.runtime_step_bound,
+        "fuel_semantics": "maximum CEK transitions per modeled input; preparation timeouts are separate and inconclusive",
         "timeouts": asdict(config.timeouts),
+        "evaluator": config.evaluator.identity() if config.evaluator else None,
         "status": status,
         "command": backend.get("command"),
         "exit_code": backend.get("exit_code"),
@@ -420,7 +615,8 @@ def _compatibility_result(
         "lean_version": config.lean_version,
         "z3_version": config.z3_version,
         "solver": config.solver,
-        "fuel": config.fuel,
+        "runtime_step_bound": config.runtime_step_bound,
+        "fuel_semantics": "maximum CEK transitions per modeled input",
         "timeouts": asdict(config.timeouts),
         "status": row["status"],
         "command": None,
@@ -451,8 +647,9 @@ def _run_sentinel_evidence(
     bundle_root: Path,
     compilers: tuple[Compiler, Compiler],
     builds: dict[str, dict[str, Any]],
+    feature_contract: Path,
 ) -> dict[str, Any]:
-    contract = load_json(CONTRACT_PATH)
+    contract = load_json(feature_contract)
     scanner_config = load_json(SCANNER_CONFIG_PATH)
     new_source = bundle_root / "new" / "package"
     census_records, census_metadata = census(new_source)
@@ -671,6 +868,89 @@ def _feature_coverage(
     }
 
 
+def _load_valid_pair_results(bundle_root: Path) -> dict[str, dict[str, Any]]:
+    schema = load_json(TOOL_ROOT / "schemas" / "pair-results.schema.json")
+    validator = Draft202012Validator(schema)
+    results: dict[str, dict[str, Any]] = {}
+    pairs_root = bundle_root / "pairs"
+    if not pairs_root.is_dir():
+        return results
+    for result_path in sorted(pairs_root.glob("*/result.json")):
+        try:
+            row = load_json(result_path)
+        except (OSError, json.JSONDecodeError):
+            continue
+        wrapper = {
+            "schema_version": CHECKER_SCHEMA_VERSION,
+            "record_count": 1,
+            "records": [row],
+        }
+        if any(validator.iter_errors(wrapper)):
+            continue
+        pair_id = row.get("pair_id")
+        if isinstance(pair_id, str) and result_path.parent.name == pair_id:
+            results[pair_id] = row
+    return results
+
+
+def _restore_reused_artifacts(
+    row: dict[str, Any],
+    previous_root: Path,
+    bundle_root: Path,
+) -> None:
+    relative_paths: set[str] = set()
+
+    def collect(value: Any, key: str | None = None) -> None:
+        if isinstance(value, dict):
+            for nested_key, nested in value.items():
+                collect(nested, nested_key)
+        elif isinstance(value, list):
+            for nested in value:
+                collect(nested, key)
+        elif (
+            isinstance(value, str)
+            and key is not None
+            and (key == "path" or key.endswith("_path"))
+            and not Path(value).is_absolute()
+        ):
+            relative_paths.add(value)
+
+    collect(row)
+    for relative in sorted(relative_paths):
+        source = previous_root / relative
+        destination = bundle_root / relative
+        if source.is_file() and not destination.exists():
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+
+
+def _cached_pair_matches(
+    row: dict[str, Any] | None,
+    pair: ScriptPair,
+    input_model: InputModel,
+    source: dict[str, Any],
+    compilers: dict[str, dict[str, Any]],
+    config: BlasterConfig,
+) -> bool:
+    if row is None:
+        return False
+    expected = _pair_result(
+        pair,
+        input_model,
+        "identical",
+        None,
+        source=source,
+        compilers=compilers,
+        config=config,
+    )
+    return (
+        row.get("pair_id") == pair.pair_id
+        and row.get("evidence_id") == expected["evidence_id"]
+        and row.get("evidence_identity") == expected["evidence_identity"]
+        and row.get("status") in FINAL_STATUSES
+    )
+
+
 def _validate_bundle(bundle_root: Path) -> list[str]:
     schemas = {
         "run.json": "run.schema.json",
@@ -699,6 +979,21 @@ def _validate_bundle(bundle_root: Path) -> list[str]:
         ):
             location = "/".join(str(part) for part in error.path)
             errors.append(f"{filename}:{location}: {error.message}")
+    pair_results_path = bundle_root / "pair-results.json"
+    if pair_results_path.is_file():
+        try:
+            aggregate = load_json(pair_results_path)
+            for row in aggregate.get("records", []):
+                pair_id = row.get("pair_id")
+                if not isinstance(pair_id, str):
+                    continue
+                individual_path = bundle_root / "pairs" / pair_id / "result.json"
+                if not individual_path.is_file():
+                    errors.append(f"missing individual pair result: {pair_id}")
+                elif load_json(individual_path) != row:
+                    errors.append(f"individual pair result mismatch: {pair_id}")
+        except (json.JSONDecodeError, OSError, AttributeError) as error:
+            errors.append(f"individual pair result validation failed: {error}")
     return errors
 
 
@@ -742,6 +1037,11 @@ def compare_package(
     blaster_config: BlasterConfig | None = None,
     backend: BlasterBackend | None = None,
     sentinel: bool = False,
+    feature_contract: Path = CONTRACT_PATH,
+    resume: bool = False,
+    force: bool = False,
+    only_pairs: set[str] | None = None,
+    source_identity_override: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     package = package.expanduser().resolve()
     if not (package / "aiken.toml").is_file():
@@ -749,11 +1049,18 @@ def compare_package(
             f"Aiken package manifest is missing: {package / 'aiken.toml'}"
         )
     config = blaster_config or load_blaster_config()
-    source_metadata = source_repository_metadata(package)
+    feature_contract = feature_contract.expanduser().resolve()
+    if sentinel and not feature_contract.is_file():
+        raise FileNotFoundError(f"feature contract is missing: {feature_contract}")
     source_hash = hash_package_tree(package, include_lock=False)
     source_state_before = hash_package_tree(package, include_lock=True)
     lock_path = package / "aiken.lock"
     lock_hash = sha256_file(lock_path) if lock_path.is_file() else None
+    source_metadata = source_identity_override or source_repository_metadata(
+        package,
+        source_hash=source_hash,
+        dependency_lock_hash=lock_hash,
+    )
     manifest_path = package / "coverage" / "feature-manifest.json"
     manifest = (
         load_json(manifest_path) if sentinel and manifest_path.is_file() else None
@@ -765,12 +1072,14 @@ def compare_package(
     checker_identity = {
         "schema_version": CHECKER_SCHEMA_VERSION,
         "mode": "sentinel" if sentinel else "package",
-        "strict": strict,
         "semantic_contract": EQUIVALENCE_FORMULA,
+        "feature_contract_sha256": (
+            sha256_file(feature_contract) if sentinel else None
+        ),
+        "runner_sha256": checker_implementation_sha256(),
     }
     run_payload = {
         "source_identity": source_metadata["identity"],
-        "package_path": str(package),
         "source_hash": source_hash,
         "dependency_lock_hash": lock_hash,
         "old_compiler_hash": compilers[0].binary_sha256,
@@ -780,9 +1089,37 @@ def compare_package(
     }
     run_id = stable_hash(run_payload)
     bundle_root = work_root.expanduser().resolve() / "runs" / run_id
+    requested_pairs = frozenset(only_pairs or ())
+    cached_pair_results: dict[str, dict[str, Any]] = {}
+    previous_bundle_root: Path | None = None
+    current_attempt_sequence = 1
     if bundle_root.exists():
-        shutil.rmtree(bundle_root)
-    for directory in ("logs", "generated-lean", "counterexamples"):
+        if resume or (force and requested_pairs):
+            cached_pair_results = _load_valid_pair_results(bundle_root)
+        if (
+            resume
+            and not force
+            and not requested_pairs
+            and (bundle_root / "summary.json").is_file()
+        ):
+            validation_errors = _validate_bundle(bundle_root)
+            if not validation_errors:
+                reused_summary = load_json(bundle_root / "summary.json")
+                reused_summary["reused"] = True
+                return reused_summary
+        if not (resume or force):
+            raise ValueError(
+                f"comparison run already exists: {bundle_root}; use --resume or --force"
+            )
+        attempts_root = work_root.expanduser().resolve() / "attempts" / run_id
+        attempts_root.mkdir(parents=True, exist_ok=True)
+        attempt_sequence = 1
+        while (attempts_root / f"{attempt_sequence:06d}").exists():
+            attempt_sequence += 1
+        previous_bundle_root = attempts_root / f"{attempt_sequence:06d}"
+        shutil.move(bundle_root, previous_bundle_root)
+        current_attempt_sequence = attempt_sequence + 1
+    for directory in ("logs", "generated-lean", "counterexamples", "pairs"):
         (bundle_root / directory).mkdir(parents=True, exist_ok=True)
     run_record = {
         "schema_version": CHECKER_SCHEMA_VERSION,
@@ -832,7 +1169,9 @@ def compare_package(
         builds[label]["primary_exit_code"] == 0 for label in ("old", "new")
     ):
         try:
-            sentinel_evidence = _run_sentinel_evidence(bundle_root, compilers, builds)
+            sentinel_evidence = _run_sentinel_evidence(
+                bundle_root, compilers, builds, feature_contract
+            )
         except (OSError, RuntimeError, ValueError) as error:
             gaps.append(f"sentinel_evidence_error:{error}")
 
@@ -841,6 +1180,7 @@ def compare_package(
     compiler_identities = {
         compiler.label: compiler.identity() for compiler in compilers
     }
+    reused_pair_ids: set[str] = set()
     pair_results.extend(
         _build_failure_results(builds, source_metadata, compiler_identities, config)
     )
@@ -855,42 +1195,137 @@ def compare_package(
             plutus_version=_plutus_version(package),
             covered_features_by_title=coverage_map,
         )
+        discovered_pair_ids = {pair.pair_id for pair in pairing.pairs}
+        missing_requested_pairs = sorted(requested_pairs - discovered_pair_ids)
+        if missing_requested_pairs:
+            raise ValueError(
+                "requested pair(s) are not present in the rebuilt package: "
+                + ", ".join(missing_requested_pairs)
+            )
         actual_backend = backend or RealBlasterBackend(config)
         for pair in pairing.pairs:
-            input_model = validator_input_model(pair)
-            if pair.old_script.sha256 == pair.new_script.sha256:
-                pair_results.append(
-                    _pair_result(
-                        pair,
-                        input_model,
-                        "identical",
-                        None,
-                        source=source_metadata,
-                        compilers=compiler_identities,
-                        config=config,
+            raw_model, ledger_model = validator_input_models(pair)
+            cached = cached_pair_results.get(pair.pair_id)
+            cached_matches = _cached_pair_matches(
+                cached,
+                pair,
+                raw_model,
+                source_metadata,
+                compiler_identities,
+                config,
+            )
+            unselected = bool(requested_pairs) and pair.pair_id not in requested_pairs
+            if cached_matches and ((resume and not force) or unselected):
+                if previous_bundle_root is not None:
+                    _restore_reused_artifacts(
+                        cached,
+                        previous_bundle_root,
+                        bundle_root,
                     )
-                )
+                pair_results.append(cached)
+                reused_pair_ids.add(pair.pair_id)
                 continue
-            blaster_result = actual_backend.compare(pair, input_model, bundle_root)
+            if unselected:
+                raise ValueError(
+                    "no matching cached evidence exists for unselected pair "
+                    f"{pair.pair_id}"
+                )
+            if pair.old_script.sha256 == pair.new_script.sha256:
+                result = _pair_result(
+                    pair,
+                    raw_model,
+                    "identical",
+                    None,
+                    source=source_metadata,
+                    compilers=compiler_identities,
+                    config=config,
+                    attempt_sequence=current_attempt_sequence,
+                )
+                result["model_results"] = {
+                    raw_model.profile: {"status": "identical", "input_model": raw_model.to_dict()},
+                    ledger_model.profile: {
+                        "status": "identical" if ledger_model.supported else "ledger_model_unsupported",
+                        "input_model": ledger_model.to_dict(),
+                    },
+                }
+                pair_results.append(result)
+                continue
+
+            raw_backend_result = actual_backend.compare(pair, raw_model, bundle_root)
+            raw_status = (
+                "equivalent_under_raw_model"
+                if raw_backend_result.status == "blaster_valid"
+                else raw_backend_result.status
+            )
             result = _pair_result(
                 pair,
-                input_model,
-                blaster_result.status,
-                blaster_result,
+                raw_model,
+                raw_status,
+                raw_backend_result,
                 source=source_metadata,
                 compilers=compiler_identities,
                 config=config,
+                attempt_sequence=current_attempt_sequence,
             )
+            raw_replay = None
             if (
-                blaster_result.status == "blaster_falsified_unreplayed"
-                and blaster_result.witness
+                raw_backend_result.status == "blaster_falsified_unreplayed"
+                and raw_backend_result.witness
             ):
-                replay = actual_backend.replay(
-                    pair, input_model, blaster_result.witness, bundle_root
+                raw_replay = actual_backend.replay(
+                    pair, raw_model, raw_backend_result.witness, bundle_root
                 )
-                result["counterexample_replay"] = replay
-                if replay.get("confirmed"):
+                result["counterexample_replay"] = raw_replay
+                if raw_replay.get("confirmed"):
                     result["status"] = "confirmed_non_equivalent"
+
+            if ledger_model.supported:
+                ledger_backend_result = actual_backend.compare(
+                    pair, ledger_model, bundle_root
+                )
+                ledger_status = (
+                    "equivalent_under_ledger_model"
+                    if ledger_backend_result.status == "blaster_valid"
+                    else ledger_backend_result.status
+                )
+                ledger_replay = None
+                if (
+                    ledger_backend_result.status == "blaster_falsified_unreplayed"
+                    and ledger_backend_result.witness
+                ):
+                    ledger_replay = actual_backend.replay(
+                        pair,
+                        ledger_model,
+                        ledger_backend_result.witness,
+                        bundle_root,
+                    )
+                ledger_record = {
+                    "status": ledger_status,
+                    "input_model": ledger_model.to_dict(),
+                    "backend": ledger_backend_result.to_dict(),
+                    "counterexample_replay": ledger_replay,
+                }
+                if (
+                    result["status"] == "confirmed_non_equivalent"
+                    and ledger_status == "equivalent_under_ledger_model"
+                ):
+                    result["status"] = "off_ledger_difference"
+            else:
+                ledger_record = {
+                    "status": "ledger_model_unsupported",
+                    "input_model": ledger_model.to_dict(),
+                    "backend": None,
+                    "counterexample_replay": None,
+                }
+            result["model_results"] = {
+                raw_model.profile: {
+                    "status": raw_status,
+                    "input_model": raw_model.to_dict(),
+                    "backend": raw_backend_result.to_dict(),
+                    "counterexample_replay": raw_replay,
+                },
+                ledger_model.profile: ledger_record,
+            }
             pair_results.append(result)
         pair_results.extend(
             _compatibility_result(
@@ -916,6 +1351,8 @@ def compare_package(
             "records": pair_results,
         },
     )
+    for row in pair_results:
+        write_json(bundle_root / "pairs" / row["pair_id"] / "result.json", row)
     feature_coverage = (
         _feature_coverage(
             manifest,
@@ -1006,6 +1443,9 @@ def compare_package(
             status: applicable_statuses.count(status)
             for status in sorted(set(applicable_statuses))
         },
+        "selected_pair_ids": sorted(requested_pairs),
+        "reused_pair_count": len(reused_pair_ids),
+        "reused_pair_ids": sorted(reused_pair_ids),
         "gaps": sorted(set(gaps)),
         "output": str(bundle_root),
         "source_immutable": source_immutable,
@@ -1046,6 +1486,9 @@ def compare_sentinel(
     strict: bool = False,
     blaster_config: BlasterConfig | None = None,
     backend: BlasterBackend | None = None,
+    feature_contract: Path = CONTRACT_PATH,
+    resume: bool = False,
+    force: bool = False,
 ) -> dict[str, Any]:
     return compare_package(
         package,
@@ -1055,4 +1498,7 @@ def compare_sentinel(
         blaster_config=blaster_config,
         backend=backend,
         sentinel=True,
+        feature_contract=feature_contract,
+        resume=resume,
+        force=force,
     )

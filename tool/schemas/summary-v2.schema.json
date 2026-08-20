@@ -4,7 +4,8 @@
   "type": "object",
   "required": [
     "schema_version", "run_id", "package", "mode", "strict_requested", "strict_pass",
-    "best_effort_completed", "counts", "status_counts", "gaps", "output",
+    "best_effort_completed", "counts", "status_counts", "selected_pair_ids",
+    "reused_pair_count", "reused_pair_ids", "gaps", "output",
     "source_immutable", "dependency_lock_shared", "schema_errors"
   ],
   "properties": {
@@ -26,6 +27,17 @@
       "additionalProperties": {"type": "integer", "minimum": 0}
     },
     "status_counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "selected_pair_ids": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "reused_pair_count": {"type": "integer", "minimum": 0},
+    "reused_pair_ids": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
     "gaps": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
     "output": {"type": "string", "minLength": 1},
     "source_immutable": {"type": "boolean"},

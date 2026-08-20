@@ -3,3 +3,4 @@ tool/.venv/
 tool/aiken-shim/target/
 **/__pycache__/
 tool/blaster-backend/.lake/
+bin/

@@ -8,6 +8,10 @@ from typing import Any, Protocol
 FINAL_STATUSES = frozenset(
     {
         "identical",
+        "equivalent_under_raw_model",
+        "equivalent_under_ledger_model",
+        "off_ledger_difference",
+        "bounded_equivalent",
         "blaster_valid",
         "blaster_falsified_unreplayed",
         "confirmed_non_equivalent",
@@ -15,19 +19,44 @@ FINAL_STATUSES = frozenset(
         "blaster_unsupported",
         "blaster_timeout",
         "blaster_error",
+        "raw_model_unsupported",
+        "ledger_model_unsupported",
+        "fallback_purpose_unsupported",
+        "model_unsupported",
+        "domain_non_vacuous_failed",
+        "source_checkout_failed",
+        "source_revision_mismatch",
+        "dependency_materialization_failed",
+        "missing_dependency_lock",
         "old_build_failed",
         "new_build_failed",
+        "old_uplc_extraction_failed",
+        "new_uplc_extraction_failed",
+        "old_blueprint_missing",
+        "new_blueprint_missing",
+        "old_blueprint_malformed",
+        "new_blueprint_malformed",
         "validator_missing_old",
         "validator_missing_new",
         "validator_signature_changed",
-        "feature_not_shared",
+        "adapter_failed",
+        "lane_failed",
+        "contract_mismatch",
+        "environment_mismatch",
+        "missing_evidence",
+        "pending_evidence",
         "expected_negative_diagnostic",
         "not_applicable",
     }
 )
 
 STRICT_PASSING_STATUSES = frozenset(
-    {"identical", "blaster_valid", "expected_negative_diagnostic", "not_applicable"}
+    {
+        "identical",
+        "equivalent_under_raw_model",
+        "expected_negative_diagnostic",
+        "not_applicable",
+    }
 )
 
 
@@ -55,26 +84,50 @@ class Timeouts:
 
 
 @dataclass(frozen=True)
+class EvaluatorConfig:
+    name: str
+    version: str
+    revision: str
+    binary_sha256: str
+    executable: Path
+    evaluation_limits: dict[str, Any]
+
+    def identity(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "version": self.version,
+            "revision": self.revision,
+            "binary_sha256": self.binary_sha256,
+            "evaluation_limits": self.evaluation_limits,
+        }
+
+
+@dataclass(frozen=True)
 class BlasterConfig:
     backend_root: Path
     revisions: dict[str, str]
     lean_version: str
     z3_version: str
     solver: str
-    fuel: int
+    solver_executable: Path
+    solver_binary_sha256: str
+    runtime_step_bound: int
     timeouts: Timeouts
     random_seed: int = 1
+    evaluator: EvaluatorConfig | None = None
 
     def identity(self) -> dict[str, Any]:
         return {
-            "backend_root": str(self.backend_root),
             "revisions": dict(sorted(self.revisions.items())),
             "lean_version": self.lean_version,
             "z3_version": self.z3_version,
             "solver": self.solver,
-            "fuel": self.fuel,
+            "solver_binary_sha256": self.solver_binary_sha256,
+            "runtime_step_bound": self.runtime_step_bound,
+            "fuel_semantics": "maximum CEK transitions per concrete modeled input",
             "timeouts": asdict(self.timeouts),
             "random_seed": self.random_seed,
+            "evaluator": self.evaluator.identity() if self.evaluator else None,
         }
 
 
@@ -121,26 +174,40 @@ class ScriptPair:
 @dataclass(frozen=True)
 class InputModel:
     kind: str
+    profile: str
+    version: str
     plutus_version: str
     purpose: str
     variables: tuple[dict[str, str], ...]
     quantified_components: tuple[str, ...]
+    argument_order: tuple[str, ...]
+    arity: int
     domain_expression: str
     domain_assumptions: tuple[str, ...]
+    domain_witness: dict[str, Any] | None
     observation: str
     non_vacuity: dict[str, Any]
+    supported: bool = True
+    unsupported_reason: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "kind": self.kind,
+            "profile": self.profile,
+            "version": self.version,
             "plutus_version": self.plutus_version,
             "purpose": self.purpose,
             "variables": list(self.variables),
             "quantified_components": list(self.quantified_components),
+            "argument_order": list(self.argument_order),
+            "arity": self.arity,
             "domain_expression": self.domain_expression,
             "domain_assumptions": list(self.domain_assumptions),
+            "domain_witness": self.domain_witness,
             "observation": self.observation,
             "non_vacuity": self.non_vacuity,
+            "supported": self.supported,
+            "unsupported_reason": self.unsupported_reason,
         }
 
 

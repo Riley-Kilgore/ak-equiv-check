@@ -1,0 +1,477 @@
+{
+  "bounded_equivalent_validator": {
+    "input_model": {
+      "argument_order": [
+        "parameter0",
+        "script_context_data"
+      ],
+      "arity": 2,
+      "domain_assumptions": [
+        "Every argument ranges over all Plutus Data, including malformed values for the Aiken schema.",
+        "The argument order is the exact compiled UPLC interface after validator parameters.",
+        "No Cardano ledger validity predicate restricts the raw domain.",
+        "Success and explicit CEK failure are logical observations; cost and trace are evidence only.",
+        "Runtime-step-bound exhaustion is distinct from validator failure."
+      ],
+      "domain_expression": "True",
+      "domain_witness": {
+        "arguments": [
+          {
+            "name": "parameter0",
+            "value": {
+              "kind": "integer",
+              "value": 0
+            }
+          },
+          {
+            "name": "script_context_data",
+            "value": {
+              "kind": "integer",
+              "value": 0
+            }
+          }
+        ],
+        "encoding": "PlutusData",
+        "lean_expression": "PlutusCore.Data.I 0"
+      },
+      "kind": "validator_raw",
+      "non_vacuity": {
+        "artifact_required": true,
+        "method": "Lean definition plus elaborated theorem that the concrete Data.I 0 tuple satisfies True",
+        "predicate": "True",
+        "status": "generated_formal_witness"
+      },
+      "observation": "success_or_failure_or_runtime_bound_exhausted",
+      "plutus_version": "v3",
+      "profile": "raw-uplc/v1",
+      "purpose": "spending",
+      "quantified_components": [
+        "validator_parameters",
+        "script_context"
+      ],
+      "supported": true,
+      "unsupported_reason": null,
+      "variables": [
+        {
+          "name": "parameter0",
+          "type": "Data"
+        },
+        {
+          "name": "script_context_data",
+          "type": "Data"
+        }
+      ],
+      "version": "1"
+    },
+    "pair": {
+      "covered_feature_ids": [],
+      "new_script": {
+        "encoding": "single_cbor_hex",
+        "path": "tool/tests/fixtures/uplc/validator-success-beta.flat",
+        "sha256": "713a6f51faa14a3835546f3516fe3b3a0debf6c209ca4530e8fc5635fec98e6d",
+        "size": 9
+      },
+      "old_script": {
+        "encoding": "single_cbor_hex",
+        "path": "tool/tests/fixtures/uplc/validator-success.flat",
+        "sha256": "465ab890d109c848ffe6ed13de735759c612eddf2bc2c676afec7db5212f4398",
+        "size": 7
+      },
+      "pair_id": "baseline-equivalent-validator",
+      "parameters": [
+        {
+          "schema": {},
+          "title": "parameter"
+        }
+      ],
+      "plutus_version": "v3",
+      "purpose": "spending",
+      "validator_identity": {
+        "blueprint_title": "baseline.baseline-equivalent-validator.spend"
+      }
+    },
+    "result": {
+      "command": [
+        "lean",
+        "${REPOSITORY_ROOT}/work/baseline-semantic-examples/generated-lean/baseline-equivalent-validator-raw-uplc-v1-equivalence-valid.lean"
+      ],
+      "duration_seconds": 2.665612,
+      "error": "equivalent only within the recorded CEK runtime step bound",
+      "exit_code": 0,
+      "generated_lean_path": "generated-lean/baseline-equivalent-validator-raw-uplc-v1-equivalence-valid.lean",
+      "generated_lean_sha256": "2ccb5470103bda2ccb52a56e4370fd7d34a72a2f38961c77bfa551d95efde056",
+      "phase_results": [
+        {
+          "command": [
+            "lean",
+            "${REPOSITORY_ROOT}/work/baseline-semantic-examples/generated-lean/baseline-equivalent-validator-raw-uplc-v1-uplc-import.lean"
+          ],
+          "cwd": "${REPOSITORY_ROOT}/work/baseline-semantic-examples",
+          "duration_seconds": 0.695755,
+          "effective_options": {
+            "counterexample_generation": true,
+            "random_seed": 1,
+            "runtime_step_bound": 10000,
+            "solver_timeout_seconds": 120
+          },
+          "exit_code": 0,
+          "generated_lean_path": "generated-lean/baseline-equivalent-validator-raw-uplc-v1-uplc-import.lean",
+          "generated_lean_sha256": "2f3a3d6c679e184467c7e0cde54c5b97a18f525b40be770697893b42b502002b",
+          "phase": "raw-uplc-v1-uplc-import",
+          "stderr_path": "logs/baseline-equivalent-validator-raw-uplc-v1-uplc-import.stderr.log",
+          "stdout_path": "logs/baseline-equivalent-validator-raw-uplc-v1-uplc-import.stdout.log",
+          "timed_out": false,
+          "timeout_seconds": 120.0
+        },
+        {
+          "command": [
+            "lean",
+            "${REPOSITORY_ROOT}/work/baseline-semantic-examples/generated-lean/baseline-equivalent-validator-raw-uplc-v1-uplc-preparation.lean"
+          ],
+          "cwd": "${REPOSITORY_ROOT}/work/baseline-semantic-examples",
+          "duration_seconds": 0.975172,
+          "effective_options": {
+            "counterexample_generation": true,
+            "random_seed": 1,
+            "runtime_step_bound": 10000,
+            "solver_timeout_seconds": 120
+          },
+          "exit_code": 0,
+          "generated_lean_path": "generated-lean/baseline-equivalent-validator-raw-uplc-v1-uplc-preparation.lean",
+          "generated_lean_sha256": "72aa49d8ff6438db664ffe63a441eafcb13baced138836c4049ceda92e61e1d8",
+          "phase": "raw-uplc-v1-uplc-preparation",
+          "stderr_path": "logs/baseline-equivalent-validator-raw-uplc-v1-uplc-preparation.stderr.log",
+          "stdout_path": "logs/baseline-equivalent-validator-raw-uplc-v1-uplc-preparation.stdout.log",
+          "timed_out": false,
+          "timeout_seconds": 300.0
+        },
+        {
+          "command": [
+            "lean",
+            "${REPOSITORY_ROOT}/work/baseline-semantic-examples/generated-lean/baseline-equivalent-validator-raw-uplc-v1-equivalence-valid.lean"
+          ],
+          "cwd": "${REPOSITORY_ROOT}/work/baseline-semantic-examples",
+          "duration_seconds": 0.994685,
+          "effective_options": {
+            "counterexample_generation": true,
+            "expected_result": "valid",
+            "random_seed": 1,
+            "runtime_step_bound": 10000,
+            "solver_timeout_seconds": 120
+          },
+          "exit_code": 0,
+          "generated_lean_path": "generated-lean/baseline-equivalent-validator-raw-uplc-v1-equivalence-valid.lean",
+          "generated_lean_sha256": "2ccb5470103bda2ccb52a56e4370fd7d34a72a2f38961c77bfa551d95efde056",
+          "phase": "raw-uplc-v1-equivalence-valid",
+          "stderr_path": "logs/baseline-equivalent-validator-raw-uplc-v1-equivalence-valid.stderr.log",
+          "stdout_path": "logs/baseline-equivalent-validator-raw-uplc-v1-equivalence-valid.stdout.log",
+          "timed_out": false,
+          "timeout_seconds": 420.0
+        }
+      ],
+      "solver_input_path": null,
+      "solver_input_sha256": null,
+      "status": "bounded_equivalent",
+      "stderr_path": "logs/baseline-equivalent-validator-raw-uplc-v1-equivalence-valid.stderr.log",
+      "stdout_path": "logs/baseline-equivalent-validator-raw-uplc-v1-equivalence-valid.stdout.log",
+      "witness": null
+    },
+    "strict_pass": false
+  },
+  "independently_replayed_non_equivalent_validator": {
+    "blaster_result": {
+      "command": [
+        "lean",
+        "${REPOSITORY_ROOT}/work/baseline-semantic-examples/generated-lean/baseline-non-equivalent-validator-raw-uplc-v1-equivalence-falsified.lean"
+      ],
+      "duration_seconds": 3.374653,
+      "error": null,
+      "exit_code": 0,
+      "generated_lean_path": "generated-lean/baseline-non-equivalent-validator-raw-uplc-v1-equivalence-falsified.lean",
+      "generated_lean_sha256": "52dd1067a9dbdfcfb276a85965c5bea69e6b5d7dd21bbc6fcc69ac2f5c79426d",
+      "phase_results": [
+        {
+          "command": [
+            "lean",
+            "${REPOSITORY_ROOT}/work/baseline-semantic-examples/generated-lean/baseline-non-equivalent-validator-raw-uplc-v1-uplc-import.lean"
+          ],
+          "cwd": "${REPOSITORY_ROOT}/work/baseline-semantic-examples",
+          "duration_seconds": 0.584828,
+          "effective_options": {
+            "counterexample_generation": true,
+            "random_seed": 1,
+            "runtime_step_bound": 10000,
+            "solver_timeout_seconds": 120
+          },
+          "exit_code": 0,
+          "generated_lean_path": "generated-lean/baseline-non-equivalent-validator-raw-uplc-v1-uplc-import.lean",
+          "generated_lean_sha256": "ce0676d838175aecc9a54e470deba8a66d785ab39eca79e68f528301d38f9bff",
+          "phase": "raw-uplc-v1-uplc-import",
+          "stderr_path": "logs/baseline-non-equivalent-validator-raw-uplc-v1-uplc-import.stderr.log",
+          "stdout_path": "logs/baseline-non-equivalent-validator-raw-uplc-v1-uplc-import.stdout.log",
+          "timed_out": false,
+          "timeout_seconds": 120.0
+        },
+        {
+          "command": [
+            "lean",
+            "${REPOSITORY_ROOT}/work/baseline-semantic-examples/generated-lean/baseline-non-equivalent-validator-raw-uplc-v1-uplc-preparation.lean"
+          ],
+          "cwd": "${REPOSITORY_ROOT}/work/baseline-semantic-examples",
+          "duration_seconds": 0.826293,
+          "effective_options": {
+            "counterexample_generation": true,
+            "random_seed": 1,
+            "runtime_step_bound": 10000,
+            "solver_timeout_seconds": 120
+          },
+          "exit_code": 0,
+          "generated_lean_path": "generated-lean/baseline-non-equivalent-validator-raw-uplc-v1-uplc-preparation.lean",
+          "generated_lean_sha256": "0018f8743c5a55ab4f694cc5c74bd69980a6258a6c84ad938c3bd591b02fc3f0",
+          "phase": "raw-uplc-v1-uplc-preparation",
+          "stderr_path": "logs/baseline-non-equivalent-validator-raw-uplc-v1-uplc-preparation.stderr.log",
+          "stdout_path": "logs/baseline-non-equivalent-validator-raw-uplc-v1-uplc-preparation.stdout.log",
+          "timed_out": false,
+          "timeout_seconds": 300.0
+        },
+        {
+          "command": [
+            "lean",
+            "${REPOSITORY_ROOT}/work/baseline-semantic-examples/generated-lean/baseline-non-equivalent-validator-raw-uplc-v1-equivalence-valid.lean"
+          ],
+          "cwd": "${REPOSITORY_ROOT}/work/baseline-semantic-examples",
+          "duration_seconds": 0.984983,
+          "effective_options": {
+            "counterexample_generation": true,
+            "expected_result": "valid",
+            "random_seed": 1,
+            "runtime_step_bound": 10000,
+            "solver_timeout_seconds": 120
+          },
+          "exit_code": 1,
+          "generated_lean_path": "generated-lean/baseline-non-equivalent-validator-raw-uplc-v1-equivalence-valid.lean",
+          "generated_lean_sha256": "cef5193a9190abf819cfcaeb8484c1c31811c5eab9ce2028c4702568258b7aad",
+          "phase": "raw-uplc-v1-equivalence-valid",
+          "stderr_path": "logs/baseline-non-equivalent-validator-raw-uplc-v1-equivalence-valid.stderr.log",
+          "stdout_path": "logs/baseline-non-equivalent-validator-raw-uplc-v1-equivalence-valid.stdout.log",
+          "timed_out": false,
+          "timeout_seconds": 420.0
+        },
+        {
+          "command": [
+            "lean",
+            "${REPOSITORY_ROOT}/work/baseline-semantic-examples/generated-lean/baseline-non-equivalent-validator-raw-uplc-v1-equivalence-falsified.lean"
+          ],
+          "cwd": "${REPOSITORY_ROOT}/work/baseline-semantic-examples",
+          "duration_seconds": 0.978549,
+          "effective_options": {
+            "counterexample_generation": true,
+            "expected_result": "falsified",
+            "random_seed": 1,
+            "runtime_step_bound": 10000,
+            "solver_timeout_seconds": 120
+          },
+          "exit_code": 0,
+          "generated_lean_path": "generated-lean/baseline-non-equivalent-validator-raw-uplc-v1-equivalence-falsified.lean",
+          "generated_lean_sha256": "52dd1067a9dbdfcfb276a85965c5bea69e6b5d7dd21bbc6fcc69ac2f5c79426d",
+          "phase": "raw-uplc-v1-equivalence-falsified",
+          "stderr_path": "logs/baseline-non-equivalent-validator-raw-uplc-v1-equivalence-falsified.stderr.log",
+          "stdout_path": "logs/baseline-non-equivalent-validator-raw-uplc-v1-equivalence-falsified.stdout.log",
+          "timed_out": false,
+          "timeout_seconds": 420.0
+        }
+      ],
+      "solver_input_path": "logs/baseline-non-equivalent-validator.smt2",
+      "solver_input_sha256": "b7149d27c7dc606fac35de21b2ef756f0dc9a6b29dcc604b449257e5cdbdb8e6",
+      "status": "blaster_falsified_unreplayed",
+      "stderr_path": "logs/baseline-non-equivalent-validator-raw-uplc-v1-equivalence-falsified.stderr.log",
+      "stdout_path": "logs/baseline-non-equivalent-validator-raw-uplc-v1-equivalence-falsified.stdout.log",
+      "witness": {
+        "protocol": "EQUIV_WITNESS_V1",
+        "raw_available": true,
+        "values": {
+          "parameter0": {
+            "hex": "213121",
+            "kind": "data",
+            "rendered": "(PlutusCore.Data.PlutusCore.DataInternal.Data.B (PlutusCore.ByteString.PlutusCore.ByteStringInternal.ByteString.mk \"!1!\"))",
+            "variant": "bytes"
+          },
+          "script_context_data": {
+            "hex": "213021",
+            "kind": "data",
+            "rendered": "(PlutusCore.Data.PlutusCore.DataInternal.Data.B (PlutusCore.ByteString.PlutusCore.ByteStringInternal.ByteString.mk \"!0!\"))",
+            "variant": "bytes"
+          }
+        }
+      }
+    },
+    "counterexample_replay": {
+      "arguments_path": "counterexamples/baseline-non-equivalent-validator-arguments.json",
+      "arguments_sha256": "fdafeb39449518e53ebff2afe415cfc87a00e69b22e6d00de45b316420fc3c74",
+      "artifact_path": "counterexamples/baseline-non-equivalent-validator.json",
+      "confirmed": true,
+      "evaluation_limits": {
+        "cpu": 10000000000,
+        "memory": 16500000,
+        "plutus_language": "PlutusV3"
+      },
+      "evaluator": {
+        "binary_sha256": "240e3340d8b999711e092f19929adc713dba78be5c2dafc645ccc5d56acf6dab",
+        "evaluation_limits": {
+          "cpu": 10000000000,
+          "memory": 16500000,
+          "plutus_language": "PlutusV3"
+        },
+        "name": "aiken-uplc",
+        "revision": "8949565a9969278846ffefe30bc3b892029dd318",
+        "version": "v1.1.23"
+      },
+      "new": {
+        "command": [
+          "${REPOSITORY_ROOT}/work/toolchains/aiken-v1.1.23-darwin-arm64/aiken-aarch64-apple-darwin/aiken",
+          "uplc",
+          "eval",
+          "--cbor",
+          "${REPOSITORY_ROOT}/tool/tests/fixtures/uplc/validator-error.flat",
+          "(con data (B #213121))",
+          "(con data (B #213021))"
+        ],
+        "cost": null,
+        "duration_seconds": 0.004877,
+        "error_class": "evaluation_failure",
+        "exit_code": 1,
+        "ok": true,
+        "result_value": null,
+        "stderr_path": "counterexamples/baseline-non-equivalent-validator-new.stderr.log",
+        "stderr_sha256": "c314f5ef6c28f56b30807041bb5548aa80130f1ffdda55dcca4c4e69e8904a92",
+        "stdout_path": "counterexamples/baseline-non-equivalent-validator-new.stdout.log",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": false,
+        "trace": []
+      },
+      "new_observation": "failure",
+      "old": {
+        "command": [
+          "${REPOSITORY_ROOT}/work/toolchains/aiken-v1.1.23-darwin-arm64/aiken-aarch64-apple-darwin/aiken",
+          "uplc",
+          "eval",
+          "--cbor",
+          "${REPOSITORY_ROOT}/tool/tests/fixtures/uplc/validator-success.flat",
+          "(con data (B #213121))",
+          "(con data (B #213021))"
+        ],
+        "cost": {
+          "cpu": 112100,
+          "memory": 800
+        },
+        "duration_seconds": 0.00586,
+        "error_class": null,
+        "exit_code": 0,
+        "ok": true,
+        "result_value": "(con unit ())",
+        "stderr_path": "counterexamples/baseline-non-equivalent-validator-old.stderr.log",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_path": "counterexamples/baseline-non-equivalent-validator-old.stdout.log",
+        "stdout_sha256": "126b05a40a1d9ec71274ea57db74d549b4527b45ab8527fe7333a9edb3114101",
+        "timed_out": false,
+        "trace": []
+      },
+      "old_observation": "success",
+      "reason": null,
+      "schema_version": 1
+    },
+    "final_status": "confirmed_non_equivalent",
+    "input_model": {
+      "argument_order": [
+        "parameter0",
+        "script_context_data"
+      ],
+      "arity": 2,
+      "domain_assumptions": [
+        "Every argument ranges over all Plutus Data, including malformed values for the Aiken schema.",
+        "The argument order is the exact compiled UPLC interface after validator parameters.",
+        "No Cardano ledger validity predicate restricts the raw domain.",
+        "Success and explicit CEK failure are logical observations; cost and trace are evidence only.",
+        "Runtime-step-bound exhaustion is distinct from validator failure."
+      ],
+      "domain_expression": "True",
+      "domain_witness": {
+        "arguments": [
+          {
+            "name": "parameter0",
+            "value": {
+              "kind": "integer",
+              "value": 0
+            }
+          },
+          {
+            "name": "script_context_data",
+            "value": {
+              "kind": "integer",
+              "value": 0
+            }
+          }
+        ],
+        "encoding": "PlutusData",
+        "lean_expression": "PlutusCore.Data.I 0"
+      },
+      "kind": "validator_raw",
+      "non_vacuity": {
+        "artifact_required": true,
+        "method": "Lean definition plus elaborated theorem that the concrete Data.I 0 tuple satisfies True",
+        "predicate": "True",
+        "status": "generated_formal_witness"
+      },
+      "observation": "success_or_failure_or_runtime_bound_exhausted",
+      "plutus_version": "v3",
+      "profile": "raw-uplc/v1",
+      "purpose": "spending",
+      "quantified_components": [
+        "validator_parameters",
+        "script_context"
+      ],
+      "supported": true,
+      "unsupported_reason": null,
+      "variables": [
+        {
+          "name": "parameter0",
+          "type": "Data"
+        },
+        {
+          "name": "script_context_data",
+          "type": "Data"
+        }
+      ],
+      "version": "1"
+    },
+    "pair": {
+      "covered_feature_ids": [],
+      "new_script": {
+        "encoding": "single_cbor_hex",
+        "path": "tool/tests/fixtures/uplc/validator-error.flat",
+        "sha256": "b8e6b0f7799de4b988f0e4b5502819f639f0b57ce7f3e6c74ea8e28fcd1dc80b",
+        "size": 6
+      },
+      "old_script": {
+        "encoding": "single_cbor_hex",
+        "path": "tool/tests/fixtures/uplc/validator-success.flat",
+        "sha256": "465ab890d109c848ffe6ed13de735759c612eddf2bc2c676afec7db5212f4398",
+        "size": 7
+      },
+      "pair_id": "baseline-non-equivalent-validator",
+      "parameters": [
+        {
+          "schema": {},
+          "title": "parameter"
+        }
+      ],
+      "plutus_version": "v3",
+      "purpose": "spending",
+      "validator_identity": {
+        "blueprint_title": "baseline.baseline-non-equivalent-validator.spend"
+      }
+    },
+    "strict_pass": false
+  },
+  "schema_version": 1
+}

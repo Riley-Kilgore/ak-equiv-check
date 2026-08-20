@@ -64,17 +64,27 @@ class RealBlasterGoldenTests(unittest.TestCase):
         pair = _pair("identical", "identity.flat", "identity.flat")
         self.assertEqual(pair.old_script.sha256, pair.new_script.sha256)
 
-    def test_structurally_different_programs_are_blaster_valid(self) -> None:
+    def test_structurally_different_programs_are_bounded_equivalent(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             output = self._output(Path(temporary))
             pair = _pair("equivalent", "identity.flat", "beta-identity.flat")
             self.assertNotEqual(pair.old_script.sha256, pair.new_script.sha256)
             result = self.backend.compare(pair, pure_integer_input_model(), output)
-            self.assertEqual(result.status, "blaster_valid")
+            self.assertEqual(result.status, "bounded_equivalent")
             self.assertEqual(result.exit_code, 0)
             self.assertTrue((output / result.generated_lean_path).is_file())
+            effective = result.phase_results[-1]["effective_options"]
+            self.assertEqual(
+                effective["random_seed"],
+                self.backend.config.random_seed,
+            )
+            self.assertEqual(
+                effective["solver_timeout_seconds"],
+                self.backend.config.timeouts.z3,
+            )
+            self.assertTrue(effective["counterexample_generation"])
 
-    def test_parameterized_validator_is_blaster_valid(self) -> None:
+    def test_parameterized_validator_is_bounded_equivalent(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             output = self._output(Path(temporary))
             pair = _validator_pair(
@@ -86,7 +96,7 @@ class RealBlasterGoldenTests(unittest.TestCase):
             self.assertIn("validator_parameters", model.quantified_components)
             self.assertIn("script_context", model.quantified_components)
             result = self.backend.compare(pair, model, output)
-            self.assertEqual(result.status, "blaster_valid")
+            self.assertEqual(result.status, "bounded_equivalent")
             self.assertEqual(result.exit_code, 0)
 
     def test_noninteger_return_is_distinct_from_evaluation_error(self) -> None:
@@ -96,17 +106,18 @@ class RealBlasterGoldenTests(unittest.TestCase):
             result = self.backend.compare(pair, pure_integer_input_model(), output)
             self.assertEqual(result.status, "blaster_falsified_unreplayed")
 
-    def test_preparation_fuel_exhaustion_is_inconclusive(self) -> None:
+    def test_runtime_bound_difference_cannot_pass_strictly(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             output = self._output(Path(temporary))
-            backend = RealBlasterBackend(replace(load_blaster_config(), fuel=20))
-            result = backend.compare(
-                _pair("fuel-exhaustion", "loop.flat", "identity.flat"),
-                pure_integer_input_model(),
-                output,
+            backend = RealBlasterBackend(
+                replace(load_blaster_config(), runtime_step_bound=20)
             )
-            self.assertEqual(result.status, "blaster_inconclusive")
-            self.assertIn("fuel", result.error or "")
+            pair = _pair("fuel-exhaustion", "loop.flat", "identity.flat")
+            model = pure_integer_input_model()
+            result = backend.compare(pair, model, output)
+            self.assertEqual(result.status, "blaster_falsified_unreplayed")
+            self.assertIsNone(result.witness)
+            self.assertNotIn(result.status, STRICT_PASSING_STATUSES)
 
     def test_falsification_is_replayed_by_the_actual_cek_evaluator(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -123,6 +134,23 @@ class RealBlasterGoldenTests(unittest.TestCase):
             self.assertNotEqual(replay["old_observation"], replay["new_observation"])
             self.assertTrue((output / replay["artifact_path"]).is_file())
             self.assertNotIn("confirmed_non_equivalent", STRICT_PASSING_STATUSES)
+
+    def test_validator_falsification_is_independently_replayed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = self._output(Path(temporary))
+            pair = _validator_pair(
+                "non-equivalent-validator",
+                "validator-success.flat",
+                "validator-error.flat",
+            )
+            model = validator_input_model(pair)
+            result = self.backend.compare(pair, model, output)
+            self.assertEqual(result.status, "blaster_falsified_unreplayed")
+            self.assertTrue(result.witness["raw_available"])
+            replay = self.backend.replay(pair, model, result.witness, output)
+            self.assertTrue(replay["confirmed"])
+            self.assertEqual(replay["old_observation"], "success")
+            self.assertEqual(replay["new_observation"], "failure")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,7 @@
+{
+  "id": "EDU_PRIMITIVES",
+  "version": 1,
+  "target_package": ".",
+  "mode": "library-harness-with-export-patch",
+  "imported_source_modules": ["modules/primitives"]
+}

@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://equiv.local/schemas/corpus-lock.schema.json",
+  "title": "Executable Aiken corpus lock",
+  "type": "object",
+  "required": ["schema_version", "compiler_baseline", "sources"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "compiler_baseline": {
+      "type": "object",
+      "required": ["old", "new"],
+      "properties": {
+        "old": {"type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "new": {"type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"}
+      },
+      "additionalProperties": false
+    },
+    "catalog": {"type": "string", "minLength": 1},
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/source"}
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "lane": {
+      "enum": [
+        "compile",
+        "check",
+        "bench",
+        "config",
+        "docs",
+        "equivalence",
+        "negative-diagnostic"
+      ]
+    },
+    "target": {
+      "type": "object",
+      "required": ["id", "lanes", "adapter", "source_type"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"},
+        "package_subpath": {"type": "string", "minLength": 1},
+        "package_glob": {"type": "string", "minLength": 1},
+        "lanes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/lane"}
+        },
+        "adapter": {"type": ["string", "null"], "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"},
+        "source_type": {
+          "enum": [
+            "root-package",
+            "nested-package",
+            "multi-package",
+            "library-harness",
+            "compile-only",
+            "check",
+            "benchmark",
+            "configuration",
+            "documentation",
+            "validator"
+          ]
+        },
+        "expected_outcome": {"enum": ["success", "diagnostic"]},
+        "expected_diagnostic": {"type": "string", "minLength": 1},
+        "timeout_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "feature_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "equivalence_required": {"type": "boolean"}
+      },
+      "oneOf": [
+        {"required": ["package_subpath"], "not": {"required": ["package_glob"]}},
+        {"required": ["package_glob"], "not": {"required": ["package_subpath"]}}
+      ],
+      "additionalProperties": false
+    },
+    "source": {
+      "type": "object",
+      "required": ["id", "url", "revision", "targets"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"},
+        "url": {"type": "string", "pattern": "^https://"},
+        "revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "tag": {"type": "string", "minLength": 1},
+        "targets": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/target"}
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

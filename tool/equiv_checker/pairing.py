@@ -145,19 +145,20 @@ def _safe_stem(value: str) -> str:
 def _identity(
     validator: Validator,
     package_identity: str,
-    package_path: str,
+    _package_path: str,
 ) -> dict[str, Any]:
     return {
-        "package_identity": package_identity,
-        "package_path": package_path,
+        "source_identity": package_identity,
         "module": validator.module,
         "validator_name": validator.name,
         "purpose": validator.purpose,
-        "parameter_count": len(validator.parameters),
         "parameter_schemas": list(validator.parameters),
         "datum_schema": validator.signature["datum"],
         "redeemer_schema": validator.signature["redeemer"],
-        "blueprint_title": validator.title,
+        "blueprint_abi": {
+            "title": validator.title,
+            "parameter_count": len(validator.parameters),
+        },
     }
 
 
