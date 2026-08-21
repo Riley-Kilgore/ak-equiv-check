@@ -122,6 +122,10 @@ def _installed_aiken(label: str, release: str) -> Path:
     if override:
         return Path(override).expanduser().resolve()
 
+    repository_executable = REPOSITORY_ROOT / "bin" / f"aiken-{release}"
+    if repository_executable.is_file():
+        return repository_executable.resolve()
+
     version_root = Path.home() / ".aiken" / "versions" / release
     executable_name = "aiken.exe" if os.name == "nt" else "aiken"
     matches = sorted(version_root.glob(f"aiken-*/{executable_name}"))

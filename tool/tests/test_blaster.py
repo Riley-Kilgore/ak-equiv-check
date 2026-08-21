@@ -7,6 +7,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from equiv_checker.blaster import (
     classify_evaluator_output,
@@ -14,6 +15,7 @@ from equiv_checker.blaster import (
     parse_blaster_output,
     parse_result_protocol,
 )
+from equiv_checker.config import _installed_aiken
 from equiv_checker.process import ProcessResult, run_process
 
 def _marker(status: str, *, pair_id: str = "pair", theorem_hash: str = "theorem") -> str:
@@ -22,6 +24,23 @@ def _marker(status: str, *, pair_id: str = "pair", theorem_hash: str = "theorem"
         f'{{"kind":"equivalence","pair_id":"{pair_id}","profile":"raw-uplc/v1",'
         f'"status":"{status}","theorem_hash":"{theorem_hash}"}}'
     )
+
+
+class BlasterConfigTests(unittest.TestCase):
+    def test_repository_toolchain_is_used_without_aikup_installation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository = Path(temporary)
+            executable = repository / "bin" / "aiken-v1.1.23"
+            executable.parent.mkdir()
+            executable.write_bytes(b"aiken")
+            with (
+                patch.dict(os.environ, {"AIKEN_NEW": ""}),
+                patch("equiv_checker.config.REPOSITORY_ROOT", repository),
+            ):
+                self.assertEqual(
+                    _installed_aiken("new", "v1.1.23"),
+                    executable.resolve(),
+                )
 
 
 class BlasterParsingTests(unittest.TestCase):
