@@ -6,9 +6,10 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from equiv_checker.cli import main
-from helpers import validator, write_fake_compiler, write_package
+from helpers import fast_config, validator, write_fake_compiler, write_package
 
 
 class CompilerOverrideCliTests(unittest.TestCase):
@@ -19,7 +20,11 @@ class CompilerOverrideCliTests(unittest.TestCase):
             old = write_fake_compiler(root / "old-custom", [validator()])
             new = write_fake_compiler(root / "new-custom", [validator()])
             output = io.StringIO()
-            with contextlib.redirect_stdout(output):
+            config = fast_config(root)
+            with (
+                patch("equiv_checker.cli.load_blaster_config", return_value=config),
+                contextlib.redirect_stdout(output),
+            ):
                 exit_code = main(
                     [
                         "compare",

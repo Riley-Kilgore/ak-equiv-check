@@ -185,6 +185,8 @@ jobs:
       - name: Install Python dependencies
         working-directory: tool
         run: uv sync --locked
+      - name: Install and verify pinned evaluator and Z3
+        run: python3 scripts/setup_toolchains.py
       - name: Create two clean Aiken worktrees at the locked base
         run: |
           git clone --filter=blob:none https://github.com/aiken-lang/aiken.git "$RUNNER_TEMP/aiken-base"
