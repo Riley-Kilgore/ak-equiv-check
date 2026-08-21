@@ -183,11 +183,15 @@ def _capture_negative_cases(
         command = [str(compiler.executable), "build", "--trace-level", "silent"]
         run = _run_tty(command, case_root)
         combined = run["stdout"] + "\n" + run["stderr"]
-        diagnostic_pattern = expectation.get("diagnostic_patterns", {}).get(
-            compiler.label, expectation["diagnostic_pattern"]
+        diagnostic_patterns = expectation.get("diagnostic_patterns", {})
+        diagnostic_pattern = diagnostic_patterns.get(
+            compiler.release,
+            diagnostic_patterns.get(compiler.label, expectation["diagnostic_pattern"]),
         )
-        expected_failure_kind = expectation.get("failure_kinds", {}).get(
-            compiler.label, "diagnostic"
+        failure_kinds = expectation.get("failure_kinds", {})
+        expected_failure_kind = failure_kinds.get(
+            compiler.release,
+            failure_kinds.get(compiler.label, "diagnostic"),
         )
         source_pattern = expectation["source_pattern"]
         diagnostic_match = re.search(

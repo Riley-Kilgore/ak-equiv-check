@@ -13,14 +13,23 @@ from .config import (
     load_blaster_config,
 )
 from .corpus import plan_corpus, run_corpus
+from .compiler_artifacts import (
+    DEFAULT_AIKEN_REPOSITORY,
+    build_local,
+    build_release,
+    verify_compiler_manifest,
+)
 from .generate_builtins import generate as generate_builtins
 from .generate_features import generate_features
+from .profiles import PROFILE_LOCK, lock_profile, run_profile
 from .runner import compare_package, compare_sentinel
 
 
 def _compiler_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--old-aiken", type=Path)
     parser.add_argument("--new-aiken", type=Path)
+    parser.add_argument("--old-compiler-manifest", type=Path)
+    parser.add_argument("--new-compiler-manifest", type=Path)
     parser.add_argument("--old-revision")
     parser.add_argument("--new-revision")
     parser.add_argument("--work", type=Path, default=DEFAULT_WORK_ROOT)
@@ -35,6 +44,58 @@ def _compiler_options(parser: argparse.ArgumentParser) -> None:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="equiv-checker")
     subcommands = parser.add_subparsers(dest="command", required=True)
+    compiler_parser = subcommands.add_parser(
+        "compiler", help="build and verify provenance-carrying Aiken compiler artifacts"
+    )
+    compiler_commands = compiler_parser.add_subparsers(
+        dest="compiler_command", required=True
+    )
+    release_parser = compiler_commands.add_parser(
+        "build-release", help="build an isolated released Aiken compiler"
+    )
+    release_parser.add_argument("--aiken-repository", default=DEFAULT_AIKEN_REPOSITORY)
+    release_parser.add_argument("--aiken-source", type=Path)
+    release_parser.add_argument("--ref", required=True)
+    release_parser.add_argument("--label")
+    release_parser.add_argument("--output", type=Path)
+    local_parser = compiler_commands.add_parser(
+        "build-local", help="build a provenance-carrying local Aiken compiler"
+    )
+    local_parser.add_argument("--aiken-source", type=Path, required=True)
+    local_parser.add_argument("--label", required=True)
+    local_parser.add_argument("--output", type=Path)
+    local_parser.add_argument("--allow-dirty", action="store_true")
+    verify_parser = compiler_commands.add_parser(
+        "verify", help="verify a compiler artifact manifest and binary"
+    )
+    verify_parser.add_argument("manifest", type=Path)
+    profile_parser = subcommands.add_parser(
+        "profile", help="lock and run versioned compiler comparison profiles"
+    )
+    profile_commands = profile_parser.add_subparsers(
+        dest="profile_command", required=True
+    )
+    profile_lock = profile_commands.add_parser(
+        "lock", help="resolve profile release tags to immutable revisions"
+    )
+    profile_lock.add_argument("profile")
+    profile_lock.add_argument("--aiken-repository", default=DEFAULT_AIKEN_REPOSITORY)
+    profile_lock.add_argument("--aiken-source", type=Path)
+    profile_lock.add_argument("--output", type=Path, default=PROFILE_LOCK)
+    profile_run = profile_commands.add_parser(
+        "run", help="run a locked historical or local compiler profile"
+    )
+    profile_run.add_argument("profile")
+    profile_run.add_argument("--aiken-repository", default=DEFAULT_AIKEN_REPOSITORY)
+    profile_run.add_argument("--aiken-source", type=Path)
+    profile_run.add_argument("--lock", type=Path, default=PROFILE_LOCK)
+    profile_run.add_argument("--old-compiler-manifest", type=Path)
+    profile_run.add_argument("--new-compiler-manifest", type=Path)
+    profile_run.add_argument("--work", type=Path, default=DEFAULT_WORK_ROOT)
+    profile_run.add_argument("--blaster-config", type=Path, default=BLASTER_CONFIG_PATH)
+    profile_run.add_argument("--resume", action="store_true")
+    profile_run.add_argument("--force", action="store_true")
+    profile_run.add_argument("--strict", action="store_true")
 
     compare_parser = subcommands.add_parser(
         "compare", help="compare every validator in a normal Aiken package"
@@ -97,6 +158,70 @@ def _parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    if args.command == "compiler":
+        try:
+            if args.compiler_command == "build-release":
+                output = args.output or (
+                    REPOSITORY_ROOT / ".ak-equiv" / "compilers" / (args.label or args.ref)
+                )
+                result = build_release(
+                    ref=args.ref,
+                    output=output,
+                    aiken_source=args.aiken_source,
+                    aiken_repository=args.aiken_repository,
+                    label=args.label,
+                )
+            elif args.compiler_command == "build-local":
+                output = args.output or (
+                    REPOSITORY_ROOT / ".ak-equiv" / "compilers" / args.label
+                )
+                result = build_local(
+                    aiken_source=args.aiken_source,
+                    output=output,
+                    label=args.label,
+                    allow_dirty=args.allow_dirty,
+                )
+            elif args.compiler_command == "verify":
+                result = verify_compiler_manifest(args.manifest)
+            else:
+                raise AssertionError(args.compiler_command)
+            print(json.dumps(result, indent=2, sort_keys=True))
+            return 0
+        except (FileNotFoundError, RuntimeError, ValueError, json.JSONDecodeError) as error:
+            print(str(error), file=sys.stderr)
+            return 1
+    if args.command == "profile":
+        try:
+            if args.profile_command == "lock":
+                result = lock_profile(
+                    args.profile,
+                    output=args.output,
+                    aiken_source=args.aiken_source,
+                    aiken_repository=args.aiken_repository,
+                )
+                exit_code = 0
+            elif args.profile_command == "run":
+                result = run_profile(
+                    args.profile,
+                    work_root=args.work,
+                    lock_path=args.lock,
+                    aiken_source=args.aiken_source,
+                    aiken_repository=args.aiken_repository,
+                    old_manifest=args.old_compiler_manifest,
+                    new_manifest=args.new_compiler_manifest,
+                    resume=args.resume,
+                    force=args.force,
+                    strict=args.strict,
+                    blaster_config=args.blaster_config,
+                )
+                exit_code = 0 if result["profile_pass"] else 2
+            else:
+                raise AssertionError(args.profile_command)
+            print(json.dumps(result, indent=2, sort_keys=True))
+            return exit_code
+        except (FileNotFoundError, RuntimeError, ValueError, json.JSONDecodeError) as error:
+            print(str(error), file=sys.stderr)
+            return 1
     if args.command == "corpus" and args.corpus_command == "plan":
         try:
             plan = plan_corpus(args.manifest, work_root=args.work)
@@ -120,15 +245,10 @@ def main(argv: list[str] | None = None) -> int:
             new_aiken=args.new_aiken,
             old_revision=args.old_revision,
             new_revision=args.new_revision,
+            old_manifest=args.old_compiler_manifest,
+            new_manifest=args.new_compiler_manifest,
         )
-        blaster_config = load_blaster_config(
-            args.blaster_config,
-            evaluator_executable=(
-                compilers[1].executable
-                if compilers[1].release != "custom"
-                else None
-            ),
-        )
+        blaster_config = load_blaster_config(args.blaster_config)
         if args.command == "compare":
             summary = compare_package(
                 args.package,

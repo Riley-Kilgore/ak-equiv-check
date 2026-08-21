@@ -1,0 +1,129 @@
+{
+  "preamble": {
+    "title": "ak-equiv/historical-codegen-equivalent",
+    "description": "Released v1.1.21 to v1.1.22 code-generation equivalence fixture",
+    "version": "0.0.0",
+    "plutusVersion": "v3",
+    "compiler": {
+      "name": "Aiken",
+      "version": "v1.1.21+42babe5"
+    },
+    "license": "Apache-2.0"
+  },
+  "validators": [
+    {
+      "title": "boolean_comparison.boolean_comparison.mint",
+      "redeemer": {
+        "title": "_redeemer",
+        "schema": {
+          "$ref": "#/definitions/Data"
+        }
+      },
+      "parameters": [
+        {
+          "title": "input",
+          "schema": {
+            "$ref": "#/definitions/Int"
+          }
+        }
+      ],
+      "compiledCode": "586d010100229800aba2aba1aab9eaab9dab9a9bad00248888896600264653001300700198039804000cc01c0092225980099b8748000c020dd500144c96600266e21200e0078a518cc00528d28528a01040206eb8c028c024dd50014590070c01c004c010dd5003c52689b2b20041",
+      "hash": "63ee39666bea86ea3833607f80c6e21654918243e5e4127b6928c377"
+    },
+    {
+      "title": "boolean_comparison.boolean_comparison.else",
+      "redeemer": {
+        "schema": {}
+      },
+      "parameters": [
+        {
+          "title": "input",
+          "schema": {
+            "$ref": "#/definitions/Int"
+          }
+        }
+      ],
+      "compiledCode": "586d010100229800aba2aba1aab9eaab9dab9a9bad00248888896600264653001300700198039804000cc01c0092225980099b8748000c020dd500144c96600266e21200e0078a518cc00528d28528a01040206eb8c028c024dd50014590070c01c004c010dd5003c52689b2b20041",
+      "hash": "63ee39666bea86ea3833607f80c6e21654918243e5e4127b6928c377"
+    },
+    {
+      "title": "subtraction.subtraction.mint",
+      "redeemer": {
+        "title": "_redeemer",
+        "schema": {
+          "$ref": "#/definitions/Data"
+        }
+      },
+      "parameters": [
+        {
+          "title": "input",
+          "schema": {
+            "$ref": "#/definitions/Int"
+          }
+        }
+      ],
+      "compiledCode": "5862010100229800aba2aba1aab9eaab9dab9a9bad00248888896600264653001300700198039804000cc01c0092225980099b8748000c020dd500144c8cdc399b80007480352016375c601460126ea800a2c8038600e00260086ea801e29344d9590021",
+      "hash": "dfff5e1433dea026cfdac107befb73259f1972a0cf42c636779aa67e"
+    },
+    {
+      "title": "subtraction.subtraction.else",
+      "redeemer": {
+        "schema": {}
+      },
+      "parameters": [
+        {
+          "title": "input",
+          "schema": {
+            "$ref": "#/definitions/Int"
+          }
+        }
+      ],
+      "compiledCode": "5862010100229800aba2aba1aab9eaab9dab9a9bad00248888896600264653001300700198039804000cc01c0092225980099b8748000c020dd500144c8cdc399b80007480352016375c601460126ea800a2c8038600e00260086ea801e29344d9590021",
+      "hash": "dfff5e1433dea026cfdac107befb73259f1972a0cf42c636779aa67e"
+    },
+    {
+      "title": "symmetric.symmetric.mint",
+      "redeemer": {
+        "title": "_redeemer",
+        "schema": {
+          "$ref": "#/definitions/Data"
+        }
+      },
+      "parameters": [
+        {
+          "title": "input",
+          "schema": {
+            "$ref": "#/definitions/Int"
+          }
+        }
+      ],
+      "compiledCode": "5862010100229800aba2aba1aab9eaab9dab9a9bad00248888896600264653001300700198039804000cc01c0092225980099b8748000c020dd500144c8cdc399b824803801d2062375c601460126ea800a2c8038600e00260086ea801e29344d9590021",
+      "hash": "62861f54314fb763ebe80bb6c5780c5761f68eb38542f5e3a1bae661"
+    },
+    {
+      "title": "symmetric.symmetric.else",
+      "redeemer": {
+        "schema": {}
+      },
+      "parameters": [
+        {
+          "title": "input",
+          "schema": {
+            "$ref": "#/definitions/Int"
+          }
+        }
+      ],
+      "compiledCode": "5862010100229800aba2aba1aab9eaab9dab9a9bad00248888896600264653001300700198039804000cc01c0092225980099b8748000c020dd500144c8cdc399b824803801d2062375c601460126ea800a2c8038600e00260086ea801e29344d9590021",
+      "hash": "62861f54314fb763ebe80bb6c5780c5761f68eb38542f5e3a1bae661"
+    }
+  ],
+  "definitions": {
+    "Data": {
+      "title": "Data",
+      "description": "Any Plutus data."
+    },
+    "Int": {
+      "dataType": "integer"
+    }
+  }
+}

@@ -16,6 +16,7 @@ FINAL_STATUSES = frozenset(
         "blaster_falsified_unreplayed",
         "confirmed_non_equivalent",
         "blaster_inconclusive",
+        "expected_codegen_delta_not_observed",
         "blaster_unsupported",
         "blaster_timeout",
         "blaster_error",
@@ -36,6 +37,13 @@ FINAL_STATUSES = frozenset(
         "new_blueprint_missing",
         "old_blueprint_malformed",
         "new_blueprint_malformed",
+        "blueprint_schema_supported",
+        "blueprint_schema_unsupported",
+        "blueprint_schema_ambiguous",
+        "blueprint_missing_required_field",
+        "blueprint_compiled_code_invalid",
+        "compiled_abi_unverified",
+        "compiled_abi_mismatch",
         "validator_missing_old",
         "validator_missing_new",
         "validator_signature_changed",
@@ -157,6 +165,7 @@ class ScriptPair:
     parameters: tuple[dict[str, Any], ...]
     covered_feature_ids: tuple[str, ...] = ()
     plutus_version: str = "v3"
+    abi: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -168,6 +177,7 @@ class ScriptPair:
             "parameters": list(self.parameters),
             "covered_feature_ids": list(self.covered_feature_ids),
             "plutus_version": self.plutus_version,
+            "abi": self.abi,
         }
 
 
@@ -225,6 +235,7 @@ class BlasterResult:
     solver_input_sha256: str | None = None
     witness: dict[str, Any] | None = None
     phase_results: list[dict[str, Any]] = field(default_factory=list)
+    proof_obligations: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
 
     def __post_init__(self) -> None:

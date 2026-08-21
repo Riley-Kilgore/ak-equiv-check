@@ -1,0 +1,40 @@
+{
+  "artifact_id": "8b8fba02dfca3e6909a207c8c3fc744736f750dc4cfc1c12bb61a440e19c1fcb",
+  "artifact_kind": "release_baseline_manifest",
+  "binary_committed": false,
+  "binary_sha256": "6082de4c5944395a1afc61c99396353fc33b7a6444e1780df9a0f4a6be80ec50",
+  "build_command": [
+    "cargo",
+    "build",
+    "--release",
+    "--locked"
+  ],
+  "build_timestamp_utc": "2026-08-21T15:23:12.991481+00:00",
+  "cache_key": "146d1c87d13cbff52da76af29cd748f114c0be746e36d1dbd203fca172a796f5",
+  "build_log_sha256": {
+    "stderr": "5fd6dc38345a9cd033dc181a5f38fdedda86cbe73b19974c0095919449c6d427",
+    "stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "cargo_lock_sha256": "0b8971e005a2bff4efdd5cbffa9e5f471660f728bd5efeb88817eaec6bc019c5",
+  "cargo_target_directory_rule": ".ak-equiv/compilers/v1.1.21/cargo-target/v1.1.21",
+  "ci_artifact_reference": "ci.yml historical-equivalent job: historical-equivalent-${{ github.run_id }}",
+  "full_commit_sha": "42babe5d5fcdd403ed58ed924fdc2aed331ede4d",
+  "reported_aiken_version": "aiken v1.1.21+42babe5",
+  "repository_url": "https://github.com/aiken-lang/aiken.git",
+  "required_rust_version": "1.86.0",
+  "rust_toolchain": {
+    "cargo_version": "cargo 1.97.1 (c980f4866 2026-06-30)",
+    "rustc_verbose": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: aarch64-apple-darwin\nrelease: 1.97.1\nLLVM version: 22.1.6",
+    "rustup_active_toolchain": "stable-aarch64-apple-darwin (default)",
+    "target_triple": "aarch64-apple-darwin"
+  },
+  "schema_version": 1,
+  "source_tree_git_sha": "c8d5b59bd1bdd96445e7d8a77f1a5067c39a56c7",
+  "source_tree_sha256": "affa2756b141904f592e9600aa11aa7d39f0a198565006f10e87ea7bc4be891d",
+  "tag": "v1.1.21",
+  "tag_object_sha": "0d58221161ee236412e161bfa4a14605c176a15c",
+  "tag_target_type": "annotated_tag",
+  "target_architecture": "arm64",
+  "target_platform": "darwin",
+  "target_triple": "aarch64-apple-darwin"
+}

@@ -1,0 +1,40 @@
+{
+  "artifact_id": "dc597cfa43c45901f54ec8d4c01656ecacc4b03ba977a3a89da11c500d555ba5",
+  "artifact_kind": "release_baseline_manifest",
+  "binary_committed": false,
+  "binary_sha256": "cfcc622d8fce8278bbd26d0ad62a5d2753da1566a0c7b50bf5e35d421d823b84",
+  "build_command": [
+    "cargo",
+    "build",
+    "--release",
+    "--locked"
+  ],
+  "build_timestamp_utc": "2026-08-21T15:23:06.836513+00:00",
+  "cache_key": "ea488b9d3c2009a26ded49523414d7fec80cf571e36af848385bf4a0c1c082d6",
+  "build_log_sha256": {
+    "stderr": "e3d8e8957af3f0aa5e101ba3f1b1552d4cb5c2f437c75c9d3de24699d1707184",
+    "stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "cargo_lock_sha256": "7a6106430d2504ad8a132aedce9aee09e3eb4e8f3ae81053b8c1385c2f31fc7f",
+  "cargo_target_directory_rule": ".ak-equiv/compilers/v1.1.22/cargo-target/v1.1.22",
+  "ci_artifact_reference": "ci.yml jobs: historical-equivalent-${{ github.run_id }} or historical-regression-${{ github.run_id }}",
+  "full_commit_sha": "39d6b049da08816aa51c9f8d3d73b9d292922f45",
+  "reported_aiken_version": "aiken v1.1.22+39d6b04",
+  "repository_url": "https://github.com/aiken-lang/aiken.git",
+  "required_rust_version": "1.94.1",
+  "rust_toolchain": {
+    "cargo_version": "cargo 1.97.1 (c980f4866 2026-06-30)",
+    "rustc_verbose": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: aarch64-apple-darwin\nrelease: 1.97.1\nLLVM version: 22.1.6",
+    "rustup_active_toolchain": "stable-aarch64-apple-darwin (default)",
+    "target_triple": "aarch64-apple-darwin"
+  },
+  "schema_version": 1,
+  "source_tree_git_sha": "6ff34ad3512485cc4a46ddb078c709a60d4cb8b9",
+  "source_tree_sha256": "32e811fcb9b44c8237acc82d33f3e7988873303065de534b2251989c440017fc",
+  "tag": "v1.1.22",
+  "tag_object_sha": "fa5979d2687f2ce80f6871fc40f391e886d8bab9",
+  "tag_target_type": "annotated_tag",
+  "target_architecture": "arm64",
+  "target_platform": "darwin",
+  "target_triple": "aarch64-apple-darwin"
+}

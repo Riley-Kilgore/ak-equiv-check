@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
 from equiv_checker.config import compiler_pair
-from equiv_checker.runner import _feature_coverage, compare_package, hash_package_tree
+from equiv_checker.runner import (
+    _feature_coverage,
+    compare_package,
+    hash_package_tree,
+    source_repository_metadata,
+)
 from helpers import (
     IDENTITY_HEX,
     ZERO_HEX,
@@ -52,6 +59,107 @@ class PackageRunnerTests(unittest.TestCase):
             self.assertEqual(pair[0].git_revision, "old-revision")
             self.assertEqual(pair[1].git_revision, "new-revision")
 
+    def test_local_source_provenance_separates_same_binary_runs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = write_package(root)
+            pair = self._compilers(root, [validator()], [validator()])
+            config = fast_config(root)
+            clean = (
+                pair[0],
+                replace(
+                    pair[1],
+                    provenance={
+                        "artifact_id": "clean-artifact",
+                        "source_tree_sha256": "1" * 64,
+                        "dirty": False,
+                        "reproducible_from_commit": True,
+                    },
+                ),
+            )
+            dirty = (
+                pair[0],
+                replace(
+                    pair[1],
+                    provenance={
+                        "artifact_id": "dirty-artifact",
+                        "source_tree_sha256": "2" * 64,
+                        "dirty": True,
+                        "reproducible_from_commit": False,
+                    },
+                ),
+            )
+            clean_summary = compare_package(
+                package,
+                clean,
+                work_root=root / "work",
+                strict=True,
+                blaster_config=config,
+                backend=FakeBackend(config, "blaster_error"),
+            )
+            dirty_summary = compare_package(
+                package,
+                dirty,
+                work_root=root / "work",
+                strict=True,
+                blaster_config=config,
+                backend=FakeBackend(config, "blaster_error"),
+            )
+            self.assertNotEqual(
+                clean_summary["run_id"], dirty_summary["run_id"]
+            )
+
+    def test_fixture_evidence_metadata_does_not_change_source_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            package = write_package(Path(temporary))
+            before = hash_package_tree(package, include_lock=False)
+            (package / "codegen-triggers.json").write_text(
+                '{"validator_pair_id":"first"}\n', encoding="utf-8"
+            )
+            (package / "regression.json").write_text(
+                '{"historical_bug":"typed_expect"}\n', encoding="utf-8"
+            )
+            self.assertEqual(
+                hash_package_tree(package, include_lock=False), before
+            )
+
+    def test_logical_source_identity_survives_unrelated_commits(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = write_package(root)
+            for arguments in (
+                ("init", "-q"),
+                ("config", "user.name", "Test"),
+                ("config", "user.email", "test@example.invalid"),
+                ("remote", "add", "origin", "git@github.com:owner/repository.git"),
+                ("add", "."),
+                ("commit", "-qm", "fixture"),
+            ):
+                subprocess.run(
+                    ["git", *arguments], cwd=root, check=True, capture_output=True
+                )
+            before = source_repository_metadata(package)
+            (root / "unrelated.txt").write_text("one\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "add", "unrelated.txt"],
+                cwd=root,
+                check=True,
+                capture_output=True,
+            )
+            subprocess.run(
+                ["git", "commit", "-qm", "unrelated"],
+                cwd=root,
+                check=True,
+                capture_output=True,
+            )
+            after = source_repository_metadata(package)
+            self.assertNotEqual(before["identity"], after["identity"])
+            self.assertEqual(before["logical_identity"], after["logical_identity"])
+            self.assertEqual(
+                before["logical_identity_fields"]["canonical_repository_url"],
+                "https://github.com/owner/repository",
+            )
+
     def test_identical_scripts_pass_without_calling_blaster(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -73,6 +181,22 @@ class PackageRunnerTests(unittest.TestCase):
             self.assertEqual(backend.calls, [])
             self.assertEqual(hash_package_tree(package, include_lock=True), before)
             self.assertTrue(summary["source_immutable"])
+
+            required = compare_package(
+                package,
+                pair,
+                work_root=root / "required-work",
+                strict=True,
+                blaster_config=config,
+                backend=backend,
+                require_script_difference=True,
+            )
+            self.assertFalse(required["strict_pass"])
+            self.assertEqual(
+                required["status_counts"],
+                {"expected_codegen_delta_not_observed": 1},
+            )
+            self.assertEqual(backend.calls, [])
 
     def test_repeated_runs_keep_identity_and_structure(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -365,7 +489,7 @@ class PackageRunnerTests(unittest.TestCase):
     def test_missing_and_malformed_blueprints_are_distinct(self) -> None:
         for mode, status in (
             ("missing", "old_blueprint_missing"),
-            ("malformed", "old_blueprint_malformed"),
+            ("malformed", "blueprint_schema_unsupported"),
         ):
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)

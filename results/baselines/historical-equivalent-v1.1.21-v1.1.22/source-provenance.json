@@ -1,0 +1,18 @@
+{
+  "commit": "749ccc7d1493bd49fca133ec4940429a7decc9ef",
+  "dirty": true,
+  "kind": "git",
+  "package_path": "fixtures/historical-codegen-equivalent",
+  "repository_url": "git@github.com:Riley-Kilgore/ak-equiv-check.git",
+  "schema_version": 1,
+  "source_hash": "91be68619b8a34d8461620b60082b3e6f1fb81c61a1bbff62c871782bc31cacc",
+  "source_identity": "7367955b15e040a0a5cf3a38fd08ed4f448723d719d8f3e785abf3bfe0574ae9",
+  "source_identity_fields": {
+    "adapter_hash": null,
+    "canonical_repository_url": "https://github.com/Riley-Kilgore/ak-equiv-check",
+    "dependency_lock_hash": "88ea28f7520d83d207bae89c30e2f6a2d27b337e36eb19b59a5ef01edefb820b",
+    "package_subpath": "fixtures/historical-codegen-equivalent",
+    "revision": "749ccc7d1493bd49fca133ec4940429a7decc9ef",
+    "source_hash": "91be68619b8a34d8461620b60082b3e6f1fb81c61a1bbff62c871782bc31cacc"
+  }
+}

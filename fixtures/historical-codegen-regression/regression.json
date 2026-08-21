@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "historical_bug": "typed_expect_unused_binding_elision",
+  "upstream_issue": "https://github.com/aiken-lang/aiken/issues/1325",
+  "source_location": "validators/typed_expect.ak:10",
+  "old_behavior": "v1.1.22 unused-binding cleanup can erase the typed expect and its Data decoder",
+  "new_behavior": "v1.1.23 preserves typed expect assignments so malformed Data fails",
+  "distinguishing_input": "raw validator parameter is malformed for List<Small>",
+  "fallback_considered": "decoder_cache_collision_issue_1331",
+  "fallback_used": false,
+  "fallback_reason": "The primary typed-expect fixture compiles and is tested first; fallback is unnecessary when replay confirms it."
+}

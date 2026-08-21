@@ -74,6 +74,24 @@ def typed_ast(package: Path) -> dict[str, Any]:
         )
     return json.loads(completed.stdout)
 
+def inspect_uplc(blueprint: Path) -> dict[str, Any]:
+    completed = subprocess.run(
+        [str(ensure_shim()), "inspect-uplc", str(blueprint)],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if completed.returncode:
+        raise RuntimeError(
+            f"compiled UPLC inspection failed for {blueprint}\n"
+            + completed.stdout
+            + completed.stderr
+        )
+    value = json.loads(completed.stdout)
+    if not isinstance(value, dict) or not isinstance(value.get("validators"), list):
+        raise RuntimeError("compiled UPLC inspector returned an invalid record")
+    return value
+
 
 def _span(payload: dict[str, Any], code_size: int) -> tuple[int, int] | None:
     location = payload.get("location")

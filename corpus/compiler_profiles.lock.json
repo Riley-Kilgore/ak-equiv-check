@@ -1,0 +1,66 @@
+{
+  "profiles": {
+    "historical-equivalent-v1.1.21-v1.1.22": {
+      "profile_definition_sha256": "d87d073388eef3d6fc3cf47c76132961f3de6687121092a14286cd16a9adb1a0",
+      "profile_id": "historical-equivalent-v1.1.21-v1.1.22",
+      "profile_registry_sha256": "6bde8b03cc44654a3864e43051f4cb1a3917ecff24c8a7c14d44d0c614e733b3",
+      "releases": {
+        "v1.1.21": {
+          "commit_sha": "42babe5d5fcdd403ed58ed924fdc2aed331ede4d",
+          "ref": "v1.1.21",
+          "repository_url": "https://github.com/aiken-lang/aiken",
+          "source_tree_git_sha": "c8d5b59bd1bdd96445e7d8a77f1a5067c39a56c7",
+          "tag_object_sha": "0d58221161ee236412e161bfa4a14605c176a15c",
+          "tag_target_type": "annotated_tag"
+        },
+        "v1.1.22": {
+          "commit_sha": "39d6b049da08816aa51c9f8d3d73b9d292922f45",
+          "ref": "v1.1.22",
+          "repository_url": "https://github.com/aiken-lang/aiken",
+          "source_tree_git_sha": "6ff34ad3512485cc4a46ddb078c709a60d4cb8b9",
+          "tag_object_sha": "fa5979d2687f2ce80f6871fc40f391e886d8bab9",
+          "tag_target_type": "annotated_tag"
+        }
+      }
+    },
+    "historical-regression-v1.1.22-v1.1.23": {
+      "profile_definition_sha256": "e3fbfd7b8367317c3e64d8f710d7a303512346f171b800f73772060a0debcb91",
+      "profile_id": "historical-regression-v1.1.22-v1.1.23",
+      "profile_registry_sha256": "6bde8b03cc44654a3864e43051f4cb1a3917ecff24c8a7c14d44d0c614e733b3",
+      "releases": {
+        "v1.1.22": {
+          "commit_sha": "39d6b049da08816aa51c9f8d3d73b9d292922f45",
+          "ref": "v1.1.22",
+          "repository_url": "https://github.com/aiken-lang/aiken",
+          "source_tree_git_sha": "6ff34ad3512485cc4a46ddb078c709a60d4cb8b9",
+          "tag_object_sha": "fa5979d2687f2ce80f6871fc40f391e886d8bab9",
+          "tag_target_type": "annotated_tag"
+        },
+        "v1.1.23": {
+          "commit_sha": "8949565a9969278846ffefe30bc3b892029dd318",
+          "ref": "v1.1.23",
+          "repository_url": "https://github.com/aiken-lang/aiken",
+          "source_tree_git_sha": "35f8350b88fa909fa0d1e9a807d2ffae8e1bc627",
+          "tag_object_sha": "5615d985a9dfce1e7012c437667e2773604342fc",
+          "tag_target_type": "annotated_tag"
+        }
+      }
+    },
+    "local-candidate": {
+      "profile_definition_sha256": "c0f1c819d7b04a0bb307be5eb06f30ef1d055c7d70e2198abb64fc0166b89161",
+      "profile_id": "local-candidate",
+      "profile_registry_sha256": "6bde8b03cc44654a3864e43051f4cb1a3917ecff24c8a7c14d44d0c614e733b3",
+      "releases": {
+        "v1.1.23": {
+          "commit_sha": "8949565a9969278846ffefe30bc3b892029dd318",
+          "ref": "v1.1.23",
+          "repository_url": "https://github.com/aiken-lang/aiken",
+          "source_tree_git_sha": "35f8350b88fa909fa0d1e9a807d2ffae8e1bc627",
+          "tag_object_sha": "5615d985a9dfce1e7012c437667e2773604342fc",
+          "tag_target_type": "annotated_tag"
+        }
+      }
+    }
+  },
+  "schema_version": 1
+}

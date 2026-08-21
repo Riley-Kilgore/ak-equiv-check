@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .blueprints import parse_blueprint
 from .models import ScriptArtifact, ScriptPair
 
 
@@ -77,13 +78,8 @@ def _schema_field(validator: dict[str, Any], name: str) -> dict[str, Any] | None
 
 
 def discover_validators(blueprint_path: Path) -> tuple[Validator, ...]:
-    try:
-        blueprint = json.loads(blueprint_path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError) as error:
-        raise ValueError(f"invalid Aiken blueprint {blueprint_path}: {error}") from error
-    rows = blueprint.get("validators")
-    if not isinstance(rows, list):
-        raise ValueError(f"Aiken blueprint has no validators array: {blueprint_path}")
+    blueprint, _compatibility = parse_blueprint(blueprint_path)
+    rows = blueprint["validators"]
     discovered: list[Validator] = []
     seen_titles: set[str] = set()
     for index, row in enumerate(rows):
@@ -161,6 +157,77 @@ def _identity(
         },
     }
 
+def _runtime_argument_names(
+    *, parameter_count: int, runtime_count: int, purpose: str, plutus_version: str
+) -> tuple[str, ...]:
+    parameters = tuple(f"parameter{index}" for index in range(parameter_count))
+    normalized = plutus_version.lower().removeprefix("plutus").removeprefix("v")
+    if normalized == "3" and runtime_count == 1:
+        return parameters + ("script_context_data",)
+    if purpose == "spending" and runtime_count == 3:
+        return parameters + ("datum_data", "redeemer_data", "script_context_data")
+    if purpose in {"minting", "rewarding", "certifying"} and runtime_count == 2:
+        return parameters + ("redeemer_data", "script_context_data")
+    return parameters + tuple(
+        f"runtime_argument{index}" for index in range(runtime_count)
+    )
+
+
+def _compiled_abi(
+    validator: Validator,
+    inspection: dict[str, Any] | None,
+    plutus_version: str,
+) -> dict[str, Any]:
+    parameter_count = len(validator.parameters)
+    arity = inspection.get("top_level_callable_arity") if inspection else None
+    verified = isinstance(arity, int) and arity >= parameter_count
+    runtime_count = arity - parameter_count if verified else None
+    argument_order = (
+        _runtime_argument_names(
+            parameter_count=parameter_count,
+            runtime_count=runtime_count,
+            purpose=validator.purpose,
+            plutus_version=plutus_version,
+        )
+        if runtime_count is not None
+        else ()
+    )
+    return {
+        "verified": verified,
+        "top_level_callable_arity": arity,
+        "applied_parameter_count": parameter_count,
+        "remaining_runtime_argument_count": runtime_count,
+        "argument_order": list(argument_order),
+        "argument_value_representation": ["PlutusData"] * len(argument_order),
+        "plutus_version": plutus_version,
+        "validator_handler": validator.title,
+        "purpose": validator.purpose,
+        "blueprint_schemas": validator.signature,
+        "abi_derivation_method": (
+            inspection.get("abi_derivation_method") if inspection else None
+        ),
+        "abi_verifier_revision": (
+            inspection.get("abi_verifier_revision") if inspection else None
+        ),
+    }
+
+
+def _abi_comparison_identity(abi: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: abi[key]
+        for key in (
+            "top_level_callable_arity",
+            "applied_parameter_count",
+            "remaining_runtime_argument_count",
+            "argument_order",
+            "argument_value_representation",
+            "plutus_version",
+            "purpose",
+            "blueprint_schemas",
+        )
+    }
+
+
 
 def _compatibility(
     status: str,
@@ -170,6 +237,8 @@ def _compatibility(
     *,
     old_signature: dict[str, Any] | None = None,
     new_signature: dict[str, Any] | None = None,
+    old_abi: dict[str, Any] | None = None,
+    new_abi: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     identity = _identity(validator, package_identity, package_path)
     payload = {
@@ -177,6 +246,8 @@ def _compatibility(
         "validator_identity": identity,
         "old_signature": old_signature,
         "new_signature": new_signature,
+        "old_abi": old_abi,
+        "new_abi": new_abi,
     }
     return {
         "pair_id": f"compat-{_safe_stem(validator.name)}-{stable_hash(payload)[:16]}",
@@ -193,12 +264,25 @@ def pair_validators(
     package_path: str,
     plutus_version: str,
     covered_features_by_title: dict[str, set[str]] | None = None,
+    old_abi_inspection: dict[str, Any] | None = None,
+    new_abi_inspection: dict[str, Any] | None = None,
 ) -> PairingResult:
     old_validators = discover_validators(old_blueprint)
     new_validators = discover_validators(new_blueprint)
     old_by_key = {validator.base_key: validator for validator in old_validators}
     new_by_key = {validator.base_key: validator for validator in new_validators}
     feature_map = covered_features_by_title or {}
+    old_inspections = {
+        row["title"]: row
+        for row in (old_abi_inspection or {}).get("validators", [])
+        if isinstance(row, dict) and isinstance(row.get("title"), str)
+    }
+    new_inspections = {
+        row["title"]: row
+        for row in (new_abi_inspection or {}).get("validators", [])
+        if isinstance(row, dict) and isinstance(row.get("title"), str)
+    }
+    enforce_abi = old_abi_inspection is not None or new_abi_inspection is not None
     pairs: list[ScriptPair] = []
     compatibility: list[dict[str, Any]] = []
 
@@ -232,6 +316,36 @@ def pair_validators(
                 )
             )
             continue
+        old_abi = _compiled_abi(old, old_inspections.get(old.title), plutus_version)
+        new_abi = _compiled_abi(new, new_inspections.get(new.title), plutus_version)
+        if enforce_abi and not (old_abi["verified"] and new_abi["verified"]):
+            compatibility.append(
+                _compatibility(
+                    "compiled_abi_unverified",
+                    new,
+                    package_identity,
+                    package_path,
+                    old_abi=old_abi,
+                    new_abi=new_abi,
+                )
+            )
+            continue
+        abi_equal = _abi_comparison_identity(old_abi) == _abi_comparison_identity(
+            new_abi
+        )
+        if enforce_abi and not abi_equal:
+            compatibility.append(
+                _compatibility(
+                    "compiled_abi_mismatch",
+                    new,
+                    package_identity,
+                    package_path,
+                    old_abi=old_abi,
+                    new_abi=new_abi,
+                )
+            )
+            continue
+
 
         identity = _identity(new, package_identity, package_path)
         pair_digest = stable_hash(identity)
@@ -258,6 +372,12 @@ def pair_validators(
                 parameters=new.parameters,
                 covered_feature_ids=tuple(sorted(feature_map.get(new.title, set()))),
                 plutus_version=plutus_version,
+                abi={
+                    "verified": old_abi["verified"] and new_abi["verified"],
+                    "equal": abi_equal,
+                    "old": old_abi,
+                    "new": new_abi,
+                },
             )
         )
 

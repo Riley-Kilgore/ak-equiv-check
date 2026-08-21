@@ -1,0 +1,52 @@
+{
+  "blaster_configuration": {
+    "evaluator": {
+      "binary_sha256": "240e3340d8b999711e092f19929adc713dba78be5c2dafc645ccc5d56acf6dab",
+      "evaluation_limits": {
+        "cpu": 10000000000,
+        "memory": 16500000,
+        "plutus_language": "PlutusV3"
+      },
+      "name": "aiken-uplc",
+      "revision": "8949565a9969278846ffefe30bc3b892029dd318",
+      "version": "v1.1.23"
+    },
+    "fuel_semantics": "maximum CEK transitions per concrete modeled input",
+    "lean_version": "4.24.0",
+    "random_seed": 1,
+    "revisions": {
+      "CardanoLedgerApiBlaster": "577e3eb03b5be09354cfdb1c0d0c12e9e16541a0",
+      "Lean-blaster": "402f6d22c1fc42e6e26255faac77e15b2450e4ab",
+      "PlutusCoreBlaster": "4ef48606303c45225d3ed2e2a87fc50280a763b7"
+    },
+    "runtime_step_bound": 10000,
+    "solver": "z3",
+    "solver_binary_sha256": "b8c06968b96f7b485382746cb8a956e131423ddd8be54ccdaed88b1466f5fc35",
+    "timeouts": {
+      "aiken_build": 300.0,
+      "blaster_optimization": 300.0,
+      "counterexample_replay": 120.0,
+      "lean_elaboration": 300.0,
+      "uplc_extraction": 300.0,
+      "uplc_import": 120.0,
+      "uplc_preparation": 300.0,
+      "z3": 120.0
+    },
+    "z3_version": "4.15.2"
+  },
+  "blaster_dependencies": {
+    "CardanoLedgerApiBlaster": "577e3eb03b5be09354cfdb1c0d0c12e9e16541a0",
+    "Lean-blaster": "402f6d22c1fc42e6e26255faac77e15b2450e4ab",
+    "PlutusCoreBlaster": "4ef48606303c45225d3ed2e2a87fc50280a763b7"
+  },
+  "checker_configuration": {
+    "feature_contract_sha256": null,
+    "mode": "package",
+    "require_script_difference": true,
+    "runner_sha256": "eadc7018740eed91dbcd141abc2b97d6337f4f505bd4f31ee3ae0b45d7c859a4",
+    "schema_version": 2,
+    "semantic_contract": "forall raw_arguments, observe(old_program(raw_arguments)) = observe(new_program(raw_arguments))"
+  },
+  "execution_environment": "darwin-arm64",
+  "schema_version": 1
+}

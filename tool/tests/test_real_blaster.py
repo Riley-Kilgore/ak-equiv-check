@@ -64,13 +64,13 @@ class RealBlasterGoldenTests(unittest.TestCase):
         pair = _pair("identical", "identity.flat", "identity.flat")
         self.assertEqual(pair.old_script.sha256, pair.new_script.sha256)
 
-    def test_structurally_different_programs_are_bounded_equivalent(self) -> None:
+    def test_structurally_different_programs_are_strictly_equivalent(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             output = self._output(Path(temporary))
             pair = _pair("equivalent", "identity.flat", "beta-identity.flat")
             self.assertNotEqual(pair.old_script.sha256, pair.new_script.sha256)
             result = self.backend.compare(pair, pure_integer_input_model(), output)
-            self.assertEqual(result.status, "bounded_equivalent")
+            self.assertEqual(result.status, "blaster_valid")
             self.assertEqual(result.exit_code, 0)
             self.assertTrue((output / result.generated_lean_path).is_file())
             effective = result.phase_results[-1]["effective_options"]
@@ -83,8 +83,16 @@ class RealBlasterGoldenTests(unittest.TestCase):
                 self.backend.config.timeouts.z3,
             )
             self.assertTrue(effective["counterexample_generation"])
+            self.assertEqual(
+                result.proof_obligations["old_program_completion"]["status"],
+                "proven",
+            )
+            self.assertEqual(
+                result.proof_obligations["new_program_completion"]["status"],
+                "proven",
+            )
 
-    def test_parameterized_validator_is_bounded_equivalent(self) -> None:
+    def test_parameterized_validator_is_strictly_equivalent(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             output = self._output(Path(temporary))
             pair = _validator_pair(
@@ -96,7 +104,7 @@ class RealBlasterGoldenTests(unittest.TestCase):
             self.assertIn("validator_parameters", model.quantified_components)
             self.assertIn("script_context", model.quantified_components)
             result = self.backend.compare(pair, model, output)
-            self.assertEqual(result.status, "bounded_equivalent")
+            self.assertEqual(result.status, "blaster_valid")
             self.assertEqual(result.exit_code, 0)
 
     def test_noninteger_return_is_distinct_from_evaluation_error(self) -> None:

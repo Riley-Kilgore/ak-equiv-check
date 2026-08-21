@@ -1,0 +1,18 @@
+{
+  "commit": "749ccc7d1493bd49fca133ec4940429a7decc9ef",
+  "dirty": true,
+  "kind": "git",
+  "package_path": "fixtures/historical-codegen-regression",
+  "repository_url": "git@github.com:Riley-Kilgore/ak-equiv-check.git",
+  "schema_version": 1,
+  "source_hash": "a129e73533b2d496e082bec20d555d95eb868decd3b356f7a9424a8187733091",
+  "source_identity": "3e899789947d0083cab42bc93aafd72a8d89b2d5d9ec92cb974a7146ad06409e",
+  "source_identity_fields": {
+    "adapter_hash": null,
+    "canonical_repository_url": "https://github.com/Riley-Kilgore/ak-equiv-check",
+    "dependency_lock_hash": "88ea28f7520d83d207bae89c30e2f6a2d27b337e36eb19b59a5ef01edefb820b",
+    "package_subpath": "fixtures/historical-codegen-regression",
+    "revision": "749ccc7d1493bd49fca133ec4940429a7decc9ef",
+    "source_hash": "a129e73533b2d496e082bec20d555d95eb868decd3b356f7a9424a8187733091"
+  }
+}

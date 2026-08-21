@@ -12,7 +12,7 @@
         "type": "object",
         "required": [
           "pair_id", "validator_identity", "old_script", "new_script", "purpose",
-          "parameters", "covered_feature_ids", "plutus_version"
+          "parameters", "covered_feature_ids", "plutus_version", "abi"
         ],
         "properties": {
           "pair_id": {"type": "string", "minLength": 1},
@@ -22,7 +22,8 @@
           "purpose": {"type": "string", "minLength": 1},
           "parameters": {"type": "array", "items": {"type": "object"}},
           "covered_feature_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
-          "plutus_version": {"type": "string", "pattern": "^v[123]$"}
+          "plutus_version": {"type": "string", "pattern": "^v[123]$"},
+          "abi": {"type": "object"}
         },
         "additionalProperties": false
       }

@@ -5,7 +5,7 @@ import json
 import os
 import platform
 import tomllib
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +35,7 @@ class Compiler:
     git_revision: str | None
     binary_sha256: str
     executable: Path
+    provenance: dict[str, Any] = field(default_factory=dict)
 
     def identity(self) -> dict[str, Any]:
         return asdict(self) | {"executable": str(self.executable)}
@@ -185,11 +186,24 @@ def compiler_pair(
     new_aiken: Path | None = None,
     old_revision: str | None = None,
     new_revision: str | None = None,
+    old_manifest: Path | None = None,
+    new_manifest: Path | None = None,
 ) -> tuple[Compiler, Compiler]:
+    if old_aiken is not None and old_manifest is not None:
+        raise ValueError("--old-aiken and --old-compiler-manifest are mutually exclusive")
+    if new_aiken is not None and new_manifest is not None:
+        raise ValueError("--new-aiken and --new-compiler-manifest are mutually exclusive")
     pair = load_json(COMPILER_PAIR_PATH)
+    if old_manifest is not None or new_manifest is not None:
+        from .compiler_artifacts import compiler_from_manifest
+
     return (
-        _compiler("old", pair["old"], old_aiken, old_revision),
-        _compiler("new", pair["new"], new_aiken, new_revision),
+        compiler_from_manifest("old", old_manifest)
+        if old_manifest is not None
+        else _compiler("old", pair["old"], old_aiken, old_revision),
+        compiler_from_manifest("new", new_manifest)
+        if new_manifest is not None
+        else _compiler("new", pair["new"], new_aiken, new_revision),
     )
 
 

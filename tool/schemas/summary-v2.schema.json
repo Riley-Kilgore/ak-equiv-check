@@ -5,8 +5,9 @@
   "required": [
     "schema_version", "run_id", "package", "mode", "strict_requested", "strict_pass",
     "best_effort_completed", "counts", "status_counts", "selected_pair_ids",
-    "reused_pair_count", "reused_pair_ids", "gaps", "output",
-    "source_immutable", "dependency_lock_shared", "schema_errors"
+    "reused_pair_count", "reused_pair_ids", "require_script_difference",
+    "script_difference_observed", "gaps", "output", "source_immutable",
+    "dependency_lock_shared", "schema_errors"
   ],
   "properties": {
     "schema_version": {"const": 2},
@@ -38,6 +39,8 @@
       "items": {"type": "string", "minLength": 1},
       "uniqueItems": true
     },
+    "require_script_difference": {"type": "boolean"},
+    "script_difference_observed": {"type": "boolean"},
     "gaps": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
     "output": {"type": "string", "minLength": 1},
     "source_immutable": {"type": "boolean"},

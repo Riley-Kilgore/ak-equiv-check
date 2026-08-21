@@ -1,6 +1,8 @@
 # Aiken validator equivalence checker
 
-`equiv-checker` is a fail-closed Aiken v1.1.22 versus v1.1.23 compiler gate. It builds isolated copies of locked packages with both pinned compilers, discovers and pairs validators by stable blueprint identity, compares exact serialized UPLC bytes, sends only different pairs to pinned Lean-blaster, and independently replays validator counterexamples with Aiken's CEK evaluator.
+`equiv-checker` is a fail-closed Aiken compiler gate. It builds isolated copies of locked packages with pinned or locally built compilers, discovers and pairs validators by stable blueprint identity, derives the callable ABI from decoded UPLC, compares exact serialized UPLC bytes, sends only different pairs to pinned Lean-blaster, and independently replays validator counterexamples with a separately pinned CEK evaluator.
+
+Logical validator IDs use the normalized repository URL, package subpath, fixture content hash, dependency lock hash, and adapter hash. The enclosing Git commit remains provenance, but unrelated commits and checkout paths do not rename an unchanged validator pair.
 
 ## Pinned setup
 
@@ -24,6 +26,76 @@ work/toolchains/<pinned-z3>/bin/z3
 ```
 
 `corpus/compiler_pair.json` records compiler releases, full revisions, archive hashes, binary hashes, and platform artifacts. `tool/blaster_config.json` pins Lean 4.24.0, Z3 4.15.2, the Blaster repositories, the independent evaluator, all stage timeouts, random seed, and the semantic runtime bound.
+
+## Released and local compiler artifacts
+
+Compiler manifests are the preferred interface. A release build resolves an annotated tag to its full commit, uses a separate checkout and Cargo target directory, runs `cargo build --release --locked`, verifies `aiken --version`, and records source, lockfile, toolchain, binary, environment, and log hashes:
+
+```bash
+cd tool
+uv run equiv-checker compiler build-release \
+  --aiken-repository https://github.com/aiken-lang/aiken \
+  --ref v1.1.23 \
+  --label base \
+  --output ../.ak-equiv/compilers/base
+```
+
+Use `--aiken-source /path/to/aiken` instead of `--aiken-repository` to resolve and build from an existing upstream clone. Cached artifacts are reused only when all build inputs and the compiler binary still match their manifest.
+
+A clean local candidate:
+
+```bash
+uv run equiv-checker compiler build-local \
+  --aiken-source /path/to/aiken-candidate \
+  --label candidate \
+  --output ../.ak-equiv/compilers/candidate
+```
+
+A dirty candidate requires explicit permission:
+
+```bash
+uv run equiv-checker compiler build-local \
+  --aiken-source /path/to/aiken-candidate \
+  --label candidate-dirty \
+  --allow-dirty \
+  --output ../.ak-equiv/compilers/candidate-dirty
+```
+
+Dirty manifests are marked non-reproducible from the commit alone. Their `reproducibility/` bundle contains the binary diff for tracked files, every untracked source file, source hashes, and build metadata. Compiler identity uses source and binary hashes, not only the reported version; two local binaries may legitimately report the same Aiken version.
+
+The `local-candidate` profile requires a clean committed release or local artifact as its base and a `build-local` artifact as its candidate. Dirty candidate evidence is allowed; a dirty base is rejected so the reference point remains reproducible.
+
+Compare a released base with a local candidate:
+
+```bash
+uv run equiv-checker compare ../fixtures/historical-codegen-equivalent \
+  --old-compiler-manifest ../.ak-equiv/compilers/base/compiler.json \
+  --new-compiler-manifest ../.ak-equiv/compilers/candidate/compiler.json \
+  --strict
+
+uv run equiv-checker profile run local-candidate \
+  --old-compiler-manifest ../.ak-equiv/compilers/base/compiler.json \
+  --new-compiler-manifest ../.ak-equiv/compilers/candidate/compiler.json \
+  --resume --strict
+```
+
+Direct `--old-aiken` and `--new-aiken` paths remain supported for non-manifest comparisons.
+
+## Historical release profiles
+
+The immutable profile lock resolves Aiken v1.1.21, v1.1.22, and v1.1.23 to full commits and source trees:
+
+```bash
+uv run equiv-checker profile lock historical-equivalent-v1.1.21-v1.1.22
+uv run equiv-checker profile lock historical-regression-v1.1.22-v1.1.23
+
+uv run equiv-checker profile run historical-equivalent-v1.1.21-v1.1.22 --resume
+uv run equiv-checker profile run historical-regression-v1.1.22-v1.1.23 --resume
+```
+
+`historical-equivalent` requires a compiler-generated script delta and strict `equivalent_under_raw_model`. `historical-regression` requires Blaster falsification, structured independent replay, `confirmed_non_equivalent`, and an underlying strict failure. The profile can pass because this expected history was observed, but `semantic_status` is never relabeled.
+
+Coverage claims stay separate. The historical positive baseline demonstrates the real compiler-to-Blaster pipeline, but its shared v1.1.21-v1.1.22 feature contract is intentionally limited to the three source constructs in `fixtures/historical-codegen-equivalent/codegen-triggers.json`. All three are linked to non-identical compiler-generated scripts; no shared fixture feature is claimed only through a byte-identical script. The broader `corpus/aiken_language_features_v1_1_23.json` contract is current-sentinel coverage and is explicitly not applied as historical evidence for the older pair. A candidate-only feature must remain a compatibility difference until that contract is updated.
 
 ## Mandatory workflows
 
@@ -106,7 +178,7 @@ Its non-vacuity stage asks Blaster for a concrete model of the purpose-specific 
 
 `#import_uplc` fuel limits import elaboration. `#prep_uplc` fuel limits symbolic preparation. Lean elaboration, Blaster optimization, and Z3 each have separate wall-clock timeouts. Any exhaustion or tool failure is inconclusive.
 
-The configured `semantic_runtime_step_bound` is different: the generated observation executes each modeled input for at most that many CEK transitions and exposes exhaustion as a distinct result. Therefore a solver-valid non-identical pair is `bounded_equivalent`, not unrestricted logical equivalence, and it does not pass strict mode. Exact serialized-byte equality remains the unconditional `identical` fast path.
+The configured `semantic_runtime_step_bound` is different: the generated observation executes each modeled input for at most that many CEK transitions and exposes exhaustion as a distinct result. A solver-valid non-identical pair is promoted to `equivalent_under_raw_model` only when separate old-program and new-program theorems prove completion within that bound for every modeled input. Without both completion proofs it remains `bounded_equivalent` and cannot pass strict mode. Exact serialized-byte equality remains the unconditional `identical` fast path.
 
 Strict semantic passing statuses are:
 
@@ -166,7 +238,7 @@ generated-lean/
 counterexamples/
 ```
 
-Corpus runs store one `result.json` per stable task. Compact committed baseline metadata lives under `results/baselines/aiken-v1.1.22-v1.1.23/`; large logs, generated Lean, SMT files, and full bundles remain CI artifacts.
+Corpus runs store one `result.json` per stable task. Compact committed historical baselines live under `results/baselines/historical-equivalent-v1.1.21-v1.1.22/` and `results/baselines/historical-regression-v1.1.22-v1.1.23/`; large compiler logs, generated Lean, SMT files, evaluator logs, binaries, and complete bundles remain CI artifacts.
 
 ## Verification and CI
 
@@ -177,6 +249,6 @@ cd tool
 uv run python -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
-The real suite covers distinct Aiken compiler builds, exact-byte equality, non-identical bounded equivalence, size-dependent runtime work, validator-shaped structured falsification, independent CEK replay, and fail-closed classifications.
+The real suite covers released compiler builds, exact-byte equality, non-identical strict equivalence with separate completion obligations, validator-shaped structured falsification, independent CEK replay, local clean and dirty compiler provenance, and fail-closed classifications.
 
-CI is split by cost and trust boundary. Pull requests run unit, schema, and fake-tool tests without downloading toolchains. The nightly scheduled job installs and hash-verifies both Aiken compilers and Z3, builds the pinned Lean dependencies, then runs each real smoke module once. Manual dispatch accepts `sentinel`, `first-wave`, or `full-corpus`; the full-corpus option runs the planner, strict sentinel, all mandatory tasks, baseline capture, and uploads the complete run bundles.
+CI is split by cost and trust boundary. Pull requests run unit, schema, and fake-tool tests without downloading toolchains. Nightly and manually dispatched jobs separately run the released positive profile, released negative profile, and clean local-compiler build smoke; every job uploads its complete evidence bundle. The existing real smoke and manually selected corpus gates remain separate.

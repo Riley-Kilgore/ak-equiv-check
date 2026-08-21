@@ -1,0 +1,10 @@
+{
+  "dependency_lock_hash": "88ea28f7520d83d207bae89c30e2f6a2d27b337e36eb19b59a5ef01edefb820b",
+  "fixture": "fixtures/historical-codegen-equivalent",
+  "old_new_dependency_lock_equal": true,
+  "old_new_source_hash_equal": true,
+  "package": "ak-equiv/historical-codegen-equivalent",
+  "schema_version": 1,
+  "source_hash": "91be68619b8a34d8461620b60082b3e6f1fb81c61a1bbff62c871782bc31cacc",
+  "source_immutable": true
+}

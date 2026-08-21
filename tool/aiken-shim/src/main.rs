@@ -96,6 +96,13 @@ fn walk_builtins(term: &UplcTerm<Name>, path: &mut Vec<Value>, found: &mut Vec<V
         }
     }
 }
+fn top_level_callable_arity(term: &UplcTerm<Name>) -> usize {
+    match term {
+        UplcTerm::Lambda { body, .. } => 1 + top_level_callable_arity(body),
+        _ => 0,
+    }
+}
+
 
 fn inspect_uplc(blueprint_path: PathBuf) -> Result<Value, Box<dyn Error>> {
     let blueprint = Project::<Quiet>::blueprint(&blueprint_path)?;
@@ -111,6 +118,9 @@ fn inspect_uplc(blueprint_path: PathBuf) -> Result<Value, Box<dyn Error>> {
             Ok(json!({
                 "title": validator.title,
                 "builtins": builtins,
+                "top_level_callable_arity": top_level_callable_arity(&program.term),
+                "abi_derivation_method": "decoded_uplc_top_level_lambda_spine",
+                "abi_verifier_revision": "aiken-equiv-shim/v2",
                 "program": program.to_pretty(),
             }))
         })

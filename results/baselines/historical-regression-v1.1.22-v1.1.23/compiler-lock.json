@@ -1,0 +1,144 @@
+{
+  "compilers": {
+    "new": {
+      "artifact_id": "125aae877b0a5c9638315191e9fdde8019a984983e43c73de795f0594c1914a1",
+      "artifact_kind": "release",
+      "binary": {
+        "path": "bin/aiken",
+        "reported_version": "aiken v1.1.23+8949565",
+        "sha256": "6685b016a98cb7a494ed1a4b2a4ad804bae7e54605a6a17c9cd50da3c9e05d31",
+        "size": 26321536
+      },
+      "build": {
+        "cargo_target_directory": "cargo-target/v1.1.23",
+        "command": [
+          "cargo",
+          "build",
+          "--release",
+          "--locked"
+        ],
+        "duration_seconds": 111.200471,
+        "exit_code": 0,
+        "logs": {
+          "stderr": "logs/cargo-build.stderr.log",
+          "stderr_sha256": "cd9c181ea0196cac0f37ca3a822ede01de414b89e1e54bf68992d482dab3f8f3",
+          "stdout": "logs/cargo-build.stdout.log",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "timestamp_utc": "2026-08-21T15:23:08.552990+00:00"
+      },
+      "cache_key": "0128eed4818ef397f6e63bef351e26709c7b17620429bf5aed83a68c84ad6099",
+      "label": "v1.1.23",
+      "reproducibility": {
+        "bundle": null,
+        "clean_committed_source": true,
+        "reproducible_from_commit": true
+      },
+      "source": {
+        "cargo_lock_sha256": "936cea60d61331474f779bcfacd15dfcc4d900f1838f6a15ceacc57e2de4153b",
+        "commit_sha": "8949565a9969278846ffefe30bc3b892029dd318",
+        "dirty": false,
+        "ref": "v1.1.23",
+        "repository_url": "https://github.com/aiken-lang/aiken.git",
+        "required_rust_version": "1.94.1",
+        "source_tree_git_sha": "35f8350b88fa909fa0d1e9a807d2ffae8e1bc627",
+        "source_tree_sha256": "985516c89f7b7bde3c29dc18b96b7e68e7bdbd0ca3a102bb37d0804a00afe06c",
+        "tag_object_sha": "5615d985a9dfce1e7012c437667e2773604342fc",
+        "tag_target_type": "annotated_tag"
+      },
+      "target": {
+        "architecture": "arm64",
+        "platform": "darwin",
+        "target_triple": "aarch64-apple-darwin"
+      },
+      "toolchain": {
+        "cargo_version": "cargo 1.97.1 (c980f4866 2026-06-30)",
+        "rustc_verbose": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: aarch64-apple-darwin\nrelease: 1.97.1\nLLVM version: 22.1.6",
+        "rustup_active_toolchain": "stable-aarch64-apple-darwin (default)",
+        "target_triple": "aarch64-apple-darwin"
+      }
+    },
+    "old": {
+      "artifact_id": "dc597cfa43c45901f54ec8d4c01656ecacc4b03ba977a3a89da11c500d555ba5",
+      "artifact_kind": "release",
+      "binary": {
+        "path": "bin/aiken",
+        "reported_version": "aiken v1.1.22+39d6b04",
+        "sha256": "cfcc622d8fce8278bbd26d0ad62a5d2753da1566a0c7b50bf5e35d421d823b84",
+        "size": 26392480
+      },
+      "build": {
+        "cargo_target_directory": "cargo-target/v1.1.22",
+        "command": [
+          "cargo",
+          "build",
+          "--release",
+          "--locked"
+        ],
+        "duration_seconds": 114.02492,
+        "exit_code": 0,
+        "logs": {
+          "stderr": "logs/cargo-build.stderr.log",
+          "stderr_sha256": "e3d8e8957af3f0aa5e101ba3f1b1552d4cb5c2f437c75c9d3de24699d1707184",
+          "stdout": "logs/cargo-build.stdout.log",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "timestamp_utc": "2026-08-21T15:23:06.836513+00:00"
+      },
+      "cache_key": "ea488b9d3c2009a26ded49523414d7fec80cf571e36af848385bf4a0c1c082d6",
+      "label": "v1.1.22",
+      "reproducibility": {
+        "bundle": null,
+        "clean_committed_source": true,
+        "reproducible_from_commit": true
+      },
+      "source": {
+        "cargo_lock_sha256": "7a6106430d2504ad8a132aedce9aee09e3eb4e8f3ae81053b8c1385c2f31fc7f",
+        "commit_sha": "39d6b049da08816aa51c9f8d3d73b9d292922f45",
+        "dirty": false,
+        "ref": "v1.1.22",
+        "repository_url": "https://github.com/aiken-lang/aiken.git",
+        "required_rust_version": "1.94.1",
+        "source_tree_git_sha": "6ff34ad3512485cc4a46ddb078c709a60d4cb8b9",
+        "source_tree_sha256": "32e811fcb9b44c8237acc82d33f3e7988873303065de534b2251989c440017fc",
+        "tag_object_sha": "fa5979d2687f2ce80f6871fc40f391e886d8bab9",
+        "tag_target_type": "annotated_tag"
+      },
+      "target": {
+        "architecture": "arm64",
+        "platform": "darwin",
+        "target_triple": "aarch64-apple-darwin"
+      },
+      "toolchain": {
+        "cargo_version": "cargo 1.97.1 (c980f4866 2026-06-30)",
+        "rustc_verbose": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: aarch64-apple-darwin\nrelease: 1.97.1\nLLVM version: 22.1.6",
+        "rustup_active_toolchain": "stable-aarch64-apple-darwin (default)",
+        "target_triple": "aarch64-apple-darwin"
+      }
+    }
+  },
+  "profile_lock": {
+    "profile_definition_sha256": "e3fbfd7b8367317c3e64d8f710d7a303512346f171b800f73772060a0debcb91",
+    "profile_id": "historical-regression-v1.1.22-v1.1.23",
+    "profile_registry_sha256": "6bde8b03cc44654a3864e43051f4cb1a3917ecff24c8a7c14d44d0c614e733b3",
+    "releases": {
+      "v1.1.22": {
+        "commit_sha": "39d6b049da08816aa51c9f8d3d73b9d292922f45",
+        "ref": "v1.1.22",
+        "repository_url": "https://github.com/aiken-lang/aiken",
+        "source_tree_git_sha": "6ff34ad3512485cc4a46ddb078c709a60d4cb8b9",
+        "tag_object_sha": "fa5979d2687f2ce80f6871fc40f391e886d8bab9",
+        "tag_target_type": "annotated_tag"
+      },
+      "v1.1.23": {
+        "commit_sha": "8949565a9969278846ffefe30bc3b892029dd318",
+        "ref": "v1.1.23",
+        "repository_url": "https://github.com/aiken-lang/aiken",
+        "source_tree_git_sha": "35f8350b88fa909fa0d1e9a807d2ffae8e1bc627",
+        "tag_object_sha": "5615d985a9dfce1e7012c437667e2773604342fc",
+        "tag_target_type": "annotated_tag"
+      }
+    }
+  },
+  "schema_version": 1
+}

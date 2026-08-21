@@ -3,11 +3,15 @@
   "diagnostic_pattern": "decorator tag",
   "diagnostic_patterns": {
     "old": "PosOverflow",
-    "new": "decorator tag"
+    "new": "decorator tag",
+    "v1.1.22": "PosOverflow",
+    "v1.1.23": "decorator tag"
   },
   "failure_kinds": {
     "old": "compiler_panic",
-    "new": "diagnostic"
+    "new": "diagnostic",
+    "v1.1.22": "compiler_panic",
+    "v1.1.23": "diagnostic"
   },
   "source_pattern": "fixture.ak"
 }

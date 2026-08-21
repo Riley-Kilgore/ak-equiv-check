@@ -12,7 +12,23 @@ from helpers import IDENTITY_HEX, validator
 
 class ValidatorPairingTests(unittest.TestCase):
     def _blueprint(self, path: Path, validators: list[dict]) -> Path:
-        path.write_text(json.dumps({"validators": validators}), encoding="utf-8")
+        path.write_text(
+            json.dumps(
+                {
+                    "preamble": {
+                        "title": "test/package",
+                        "description": "Test package",
+                        "version": "0.0.0",
+                        "license": "Apache-2.0",
+                        "compiler": {"name": "Aiken", "version": "v1.1.23"},
+                        "plutusVersion": "v3",
+                    },
+                    "validators": validators,
+                    "definitions": {},
+                }
+            ),
+            encoding="utf-8",
+        )
         return path
 
     def test_pairing_is_stable_and_independent_of_array_position(self) -> None:

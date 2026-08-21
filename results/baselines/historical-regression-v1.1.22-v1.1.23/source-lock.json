@@ -1,0 +1,10 @@
+{
+  "dependency_lock_hash": "88ea28f7520d83d207bae89c30e2f6a2d27b337e36eb19b59a5ef01edefb820b",
+  "fixture": "fixtures/historical-codegen-regression",
+  "old_new_dependency_lock_equal": true,
+  "old_new_source_hash_equal": true,
+  "package": "ak-equiv/historical-codegen-regression",
+  "schema_version": 1,
+  "source_hash": "a129e73533b2d496e082bec20d555d95eb868decd3b356f7a9424a8187733091",
+  "source_immutable": true
+}

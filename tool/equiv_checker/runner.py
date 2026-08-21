@@ -13,7 +13,8 @@ from typing import Any
 from jsonschema import Draft202012Validator
 
 from .blaster import RealBlasterBackend
-from .census import census
+from .blueprints import inspect_blueprint
+from .census import census, ensure_shim, inspect_uplc
 from .config import (
     CONTRACT_PATH,
     DEFAULT_WORK_ROOT,
@@ -60,8 +61,10 @@ def _ignored(relative: Path) -> bool:
     if any(part in _GENERATED_NAMES for part in relative.parts):
         return True
     name = relative.name
-    return name == "plutus.json" or (
-        name.startswith("plutus-") and name.endswith(".json")
+    return (
+        name in {"codegen-triggers.json", "regression.json"}
+        or name == "plutus.json"
+        or (name.startswith("plutus-") and name.endswith(".json"))
     )
 
 
@@ -80,6 +83,24 @@ def hash_package_tree(package: Path, *, include_lock: bool) -> str:
         digest.update(path.read_bytes())
         digest.update(b"\0")
     return digest.hexdigest()
+
+
+def _compiler_evidence_identity(compiler: Compiler) -> dict[str, Any]:
+    provenance = compiler.provenance
+    return {
+        "release": compiler.release,
+        "reported_version": compiler.reported_version,
+        "git_revision": compiler.git_revision,
+        "binary_sha256": compiler.binary_sha256,
+        "artifact_id": provenance.get("artifact_id"),
+        "artifact_kind": provenance.get("artifact_kind"),
+        "source_tree_sha256": provenance.get("source_tree_sha256"),
+        "cargo_lock_sha256": provenance.get("cargo_lock_sha256"),
+        "dirty": provenance.get("dirty"),
+        "reproducible_from_commit": provenance.get("reproducible_from_commit"),
+    }
+
+
 def checker_implementation_sha256() -> str:
     digest = hashlib.sha256()
     package_root = Path(__file__).resolve().parent
@@ -152,14 +173,14 @@ def source_repository_metadata(
     )
     root_result = _git(package, "rev-parse", "--show-toplevel")
     if root_result.exit_code != 0:
-        identity_fields = {
+        logical_identity_fields = {
             "canonical_repository_url": "local-content",
-            "revision": None,
             "package_subpath": ".",
             "source_hash": source_hash,
             "dependency_lock_hash": dependency_lock_hash,
             "adapter_hash": adapter_hash,
         }
+        identity_fields = {"revision": None, **logical_identity_fields}
         return {
             "kind": "local_directory",
             "repository_root": None,
@@ -169,6 +190,8 @@ def source_repository_metadata(
             "package_path": ".",
             "identity_fields": identity_fields,
             "identity": stable_hash(identity_fields),
+            "logical_identity_fields": logical_identity_fields,
+            "logical_identity": stable_hash(logical_identity_fields),
         }
     repository_root = Path(root_result.stdout.strip()).resolve()
     commit_result = _git(package, "rev-parse", "HEAD")
@@ -178,18 +201,18 @@ def source_repository_metadata(
     commit = commit_result.stdout.strip() if commit_result.exit_code == 0 else None
     remote = remote_result.stdout.strip() if remote_result.exit_code == 0 else None
     canonical_remote = remote or "local-git"
-    match = re.fullmatch(r"git@github\\.com:(.+?)(?:\\.git)?", canonical_remote)
+    match = re.fullmatch(r"git@github\.com:(.+?)(?:\.git)?", canonical_remote)
     if match:
         canonical_remote = f"https://github.com/{match.group(1)}"
     canonical_remote = canonical_remote.removesuffix(".git").rstrip("/")
-    identity_fields = {
+    logical_identity_fields = {
         "canonical_repository_url": canonical_remote,
-        "revision": commit,
         "package_subpath": relative,
         "source_hash": source_hash,
         "dependency_lock_hash": dependency_lock_hash,
         "adapter_hash": adapter_hash,
     }
+    identity_fields = {"revision": commit, **logical_identity_fields}
     return {
         "kind": "git",
         "repository_root": str(repository_root),
@@ -201,6 +224,8 @@ def source_repository_metadata(
         "package_path": relative,
         "identity_fields": identity_fields,
         "identity": stable_hash(identity_fields),
+        "logical_identity_fields": logical_identity_fields,
+        "logical_identity": stable_hash(logical_identity_fields),
     }
 
 
@@ -303,14 +328,29 @@ def _build_one(
         shutil.copy2(blueprint_source, blueprint)
         artifacts.append(_artifact(blueprint, compiler_root, "plutus_blueprint"))
     blueprint_present = blueprint_source.is_file()
-    blueprint_malformed = False
+    blueprint_compatibility = (
+        inspect_blueprint(blueprint_source)
+        if blueprint_present
+        else {
+            "status": "blueprint_missing_required_field",
+            "detail": "blueprint file is missing",
+            "schema_family": None,
+            "parser_version": "aiken-blueprint-parser/v1",
+        }
+    )
+    blueprint_malformed = (
+        blueprint_compatibility["status"] != "blueprint_schema_supported"
+    )
     blueprint_value: dict[str, Any] | None = None
-    if blueprint_present:
+    if blueprint_present and not blueprint_malformed:
+        blueprint_value = json.loads(blueprint_source.read_text(encoding="utf-8"))
+    abi_inspection: dict[str, Any] | None = None
+    abi_inspection_error: str | None = None
+    if blueprint_value is not None:
         try:
-            blueprint_value = json.loads(blueprint_source.read_text(encoding="utf-8"))
-            blueprint_malformed = not isinstance(blueprint_value.get("validators"), list)
-        except (json.JSONDecodeError, OSError, AttributeError):
-            blueprint_malformed = True
+            abi_inspection = inspect_uplc(blueprint_source)
+        except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as error:
+            abi_inspection_error = str(error)
     extraction_exit_code = extraction.exit_code if extraction else None
     extraction_timed_out = extraction.timed_out if extraction else False
     if (
@@ -398,6 +438,9 @@ def _build_one(
         "uplc_extraction_timed_out": extraction_timed_out,
         "blueprint_present": blueprint_present,
         "blueprint_malformed": blueprint_malformed,
+        "blueprint_compatibility": blueprint_compatibility,
+        "abi_inspection": abi_inspection,
+        "abi_inspection_error": abi_inspection_error,
         "runs": [build_record, *extraction_records],
         "negative_runs": [],
         "artifacts": sorted(artifacts, key=lambda row: row["path"]),
@@ -451,9 +494,16 @@ def _build_failure_results(
             stage = "blueprint"
             run = build["runs"][-1]
         elif build["blueprint_malformed"]:
-            status = f"{label}_blueprint_malformed"
-            detail = "plutus.json is invalid or has no validators array"
+            status = build["blueprint_compatibility"]["status"]
+            detail = build["blueprint_compatibility"].get(
+                "detail", "plutus.json uses an unsupported blueprint schema"
+            )
             stage = "blueprint"
+            run = build["runs"][-1]
+        elif build["abi_inspection"] is None:
+            status = "compiled_abi_unverified"
+            detail = build["abi_inspection_error"] or "compiled UPLC ABI inspection is missing"
+            stage = "abi"
             run = build["runs"][-1]
         else:
             continue
@@ -556,6 +606,7 @@ def _pair_result(
         "purpose": pair.purpose,
         "parameters": list(pair.parameters),
         "covered_feature_ids": list(pair.covered_feature_ids),
+        "abi": pair.abi,
         "input_model": input_model.to_dict(),
         "domain_assumptions": list(input_model.domain_assumptions),
         "semantic_contract": EQUIVALENCE_FORMULA,
@@ -580,6 +631,7 @@ def _pair_result(
         "solver_input_sha256": backend.get("solver_input_sha256"),
         "witness": backend.get("witness"),
         "phase_results": backend.get("phase_results", []),
+        "proof_obligations": backend.get("proof_obligations", {}),
         "counterexample_replay": None,
         "error": backend.get("error"),
         "cost_and_trace": {
@@ -634,6 +686,14 @@ def _compatibility_result(
         "error": None,
         "old_signature": row.get("old_signature"),
         "new_signature": row.get("new_signature"),
+        "abi": {
+            "verified": False,
+            "equal": False,
+            "old": row.get("old_abi"),
+            "new": row.get("new_abi"),
+        },
+        "old_abi": row.get("old_abi"),
+        "new_abi": row.get("new_abi"),
         "cost_and_trace": {
             "included_in_semantic_verdict": False,
             "cpu": None,
@@ -924,6 +984,27 @@ def _restore_reused_artifacts(
             shutil.copy2(source, destination)
 
 
+def _replay_counterexample(
+    backend: BlasterBackend,
+    config: BlasterConfig,
+    compilers: dict[str, dict[str, Any]],
+    pair: ScriptPair,
+    input_model: InputModel,
+    witness: dict[str, Any],
+    bundle_root: Path,
+) -> dict[str, Any]:
+    evaluator = config.evaluator
+    if evaluator is not None and evaluator.binary_sha256 in {
+        compiler.get("binary_sha256") for compiler in compilers.values()
+    }:
+        return {
+            "confirmed": False,
+            "reason": "independent replay evaluator must not be either compared compiler binary",
+            "evaluator": evaluator.identity(),
+        }
+    return backend.replay(pair, input_model, witness, bundle_root)
+
+
 def _cached_pair_matches(
     row: dict[str, Any] | None,
     pair: ScriptPair,
@@ -1042,6 +1123,7 @@ def compare_package(
     force: bool = False,
     only_pairs: set[str] | None = None,
     source_identity_override: dict[str, Any] | None = None,
+    require_script_difference: bool = False,
 ) -> dict[str, Any]:
     package = package.expanduser().resolve()
     if not (package / "aiken.toml").is_file():
@@ -1072,6 +1154,7 @@ def compare_package(
     checker_identity = {
         "schema_version": CHECKER_SCHEMA_VERSION,
         "mode": "sentinel" if sentinel else "package",
+        "require_script_difference": require_script_difference,
         "semantic_contract": EQUIVALENCE_FORMULA,
         "feature_contract_sha256": (
             sha256_file(feature_contract) if sentinel else None
@@ -1082,8 +1165,8 @@ def compare_package(
         "source_identity": source_metadata["identity"],
         "source_hash": source_hash,
         "dependency_lock_hash": lock_hash,
-        "old_compiler_hash": compilers[0].binary_sha256,
-        "new_compiler_hash": compilers[1].binary_sha256,
+        "old_compiler": _compiler_evidence_identity(compilers[0]),
+        "new_compiler": _compiler_evidence_identity(compilers[1]),
         "checker_configuration": checker_identity,
         "blaster_configuration": config.identity(),
     }
@@ -1141,6 +1224,7 @@ def compare_package(
         "strict_pass": None,
     }
     write_json(bundle_root / "run.json", run_record)
+    ensure_shim()
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         futures = {
@@ -1190,10 +1274,14 @@ def compare_package(
             bundle_root / "old" / "raw" / "silent" / "plutus.json",
             bundle_root / "new" / "raw" / "silent" / "plutus.json",
             bundle_root,
-            package_identity=source_metadata["identity"],
+            package_identity=source_metadata.get(
+                "logical_identity", source_metadata["identity"]
+            ),
             package_path=str(package),
             plutus_version=_plutus_version(package),
             covered_features_by_title=coverage_map,
+            old_abi_inspection=builds["old"]["abi_inspection"],
+            new_abi_inspection=builds["new"]["abi_inspection"],
         )
         discovered_pair_ids = {pair.pair_id for pair in pairing.pairs}
         missing_requested_pairs = sorted(requested_pairs - discovered_pair_ids)
@@ -1202,6 +1290,9 @@ def compare_package(
                 "requested pair(s) are not present in the rebuilt package: "
                 + ", ".join(missing_requested_pairs)
             )
+        script_difference_observed = any(
+            pair.old_script.sha256 != pair.new_script.sha256 for pair in pairing.pairs
+        )
         actual_backend = backend or RealBlasterBackend(config)
         for pair in pairing.pairs:
             raw_model, ledger_model = validator_input_models(pair)
@@ -1222,6 +1313,26 @@ def compare_package(
                         previous_bundle_root,
                         bundle_root,
                     )
+                if (
+                    resume
+                    and cached.get("status") == "blaster_falsified_unreplayed"
+                    and isinstance(cached.get("witness"), dict)
+                ):
+                    replay = _replay_counterexample(
+                        actual_backend,
+                        config,
+                        compiler_identities,
+                        pair,
+                        raw_model,
+                        cached["witness"],
+                        bundle_root,
+                    )
+                    cached["counterexample_replay"] = replay
+                    raw_record = cached.get("model_results", {}).get(raw_model.profile)
+                    if isinstance(raw_record, dict):
+                        raw_record["counterexample_replay"] = replay
+                    if replay.get("confirmed"):
+                        cached["status"] = "confirmed_non_equivalent"
                 pair_results.append(cached)
                 reused_pair_ids.add(pair.pair_id)
                 continue
@@ -1231,10 +1342,15 @@ def compare_package(
                     f"{pair.pair_id}"
                 )
             if pair.old_script.sha256 == pair.new_script.sha256:
+                identical_status = (
+                    "expected_codegen_delta_not_observed"
+                    if require_script_difference and not script_difference_observed
+                    else "identical"
+                )
                 result = _pair_result(
                     pair,
                     raw_model,
-                    "identical",
+                    identical_status,
                     None,
                     source=source_metadata,
                     compilers=compiler_identities,
@@ -1242,9 +1358,16 @@ def compare_package(
                     attempt_sequence=current_attempt_sequence,
                 )
                 result["model_results"] = {
-                    raw_model.profile: {"status": "identical", "input_model": raw_model.to_dict()},
+                    raw_model.profile: {
+                        "status": identical_status,
+                        "input_model": raw_model.to_dict(),
+                    },
                     ledger_model.profile: {
-                        "status": "identical" if ledger_model.supported else "ledger_model_unsupported",
+                        "status": (
+                            identical_status
+                            if ledger_model.supported
+                            else "ledger_model_unsupported"
+                        ),
                         "input_model": ledger_model.to_dict(),
                     },
                 }
@@ -1272,8 +1395,14 @@ def compare_package(
                 raw_backend_result.status == "blaster_falsified_unreplayed"
                 and raw_backend_result.witness
             ):
-                raw_replay = actual_backend.replay(
-                    pair, raw_model, raw_backend_result.witness, bundle_root
+                raw_replay = _replay_counterexample(
+                    actual_backend,
+                    config,
+                    compiler_identities,
+                    pair,
+                    raw_model,
+                    raw_backend_result.witness,
+                    bundle_root,
                 )
                 result["counterexample_replay"] = raw_replay
                 if raw_replay.get("confirmed"):
@@ -1293,7 +1422,10 @@ def compare_package(
                     ledger_backend_result.status == "blaster_falsified_unreplayed"
                     and ledger_backend_result.witness
                 ):
-                    ledger_replay = actual_backend.replay(
+                    ledger_replay = _replay_counterexample(
+                        actual_backend,
+                        config,
+                        compiler_identities,
                         pair,
                         ledger_model,
                         ledger_backend_result.witness,
@@ -1417,6 +1549,8 @@ def compare_package(
                 "validator_missing_old",
                 "validator_missing_new",
                 "validator_signature_changed",
+                "compiled_abi_unverified",
+                "compiled_abi_mismatch",
                 "feature_not_shared",
             }
             for row in pair_results
@@ -1445,6 +1579,16 @@ def compare_package(
         },
         "selected_pair_ids": sorted(requested_pairs),
         "reused_pair_count": len(reused_pair_ids),
+        "require_script_difference": require_script_difference,
+        "script_difference_observed": (
+            any(
+                row.get("old_script", {}).get("sha256")
+                != row.get("new_script", {}).get("sha256")
+                for row in pair_results
+                if isinstance(row.get("old_script"), dict)
+                and isinstance(row.get("new_script"), dict)
+            )
+        ),
         "reused_pair_ids": sorted(reused_pair_ids),
         "gaps": sorted(set(gaps)),
         "output": str(bundle_root),

@@ -42,6 +42,159 @@ jobs:
           tests.test_pairing
           tests.test_runner
           tests.test_semantics
+          tests.test_blueprints
+          tests.test_compiler_artifacts
+          tests.test_profiles
+
+  historical-equivalent:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+        with:
+          version: "0.8.13"
+          enable-cache: true
+      - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # v1
+        with:
+          use-github-cache: true
+          use-mathlib-cache: false
+      - name: Restore historical compiler cache
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            .ak-equiv/compilers/*/bin/
+            .ak-equiv/compilers/*/compiler.json
+            .ak-equiv/compilers/*/logs/
+          key: historical-equivalent-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('corpus/compiler_profiles.lock.json', 'compiler-artifacts/*.json') }}
+      - name: Install and verify pinned evaluator and Z3
+        run: python3 scripts/setup_toolchains.py
+      - name: Install Python dependencies
+        working-directory: tool
+        run: uv sync --locked
+      - name: Build exact pinned Blaster dependencies
+        working-directory: tool/blaster-backend
+        run: lake build CardanoLedgerApi
+      - name: Build or verify Aiken v1.1.21
+        working-directory: tool
+        run: uv run equiv-checker compiler build-release --ref v1.1.21 --output ../.ak-equiv/compilers/v1.1.21
+      - name: Build or verify Aiken v1.1.22
+        working-directory: tool
+        run: uv run equiv-checker compiler build-release --ref v1.1.22 --output ../.ak-equiv/compilers/v1.1.22
+      - name: Verify the immutable profile lock
+        working-directory: tool
+        run: uv run equiv-checker profile lock historical-equivalent-v1.1.21-v1.1.22
+      - name: Run released positive profile with real Blaster
+        working-directory: tool
+        run: uv run equiv-checker profile run historical-equivalent-v1.1.21-v1.1.22 --resume
+      - name: Upload complete positive evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: historical-equivalent-${{ github.run_id }}
+          path: |
+            .ak-equiv/compilers/v1.1.21/compiler.json
+            .ak-equiv/compilers/v1.1.21/logs/
+            .ak-equiv/compilers/v1.1.22/compiler.json
+            .ak-equiv/compilers/v1.1.22/logs/
+            work/runs/
+          if-no-files-found: error
+
+  historical-regression:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+        with:
+          version: "0.8.13"
+          enable-cache: true
+      - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # v1
+        with:
+          use-github-cache: true
+          use-mathlib-cache: false
+      - name: Restore historical compiler cache
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            .ak-equiv/compilers/*/bin/
+            .ak-equiv/compilers/*/compiler.json
+            .ak-equiv/compilers/*/logs/
+          key: historical-regression-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('corpus/compiler_profiles.lock.json', 'compiler-artifacts/*.json') }}
+      - name: Install and verify pinned evaluator and Z3
+        run: python3 scripts/setup_toolchains.py
+      - name: Install Python dependencies
+        working-directory: tool
+        run: uv sync --locked
+      - name: Build exact pinned Blaster dependencies
+        working-directory: tool/blaster-backend
+        run: lake build CardanoLedgerApi
+      - name: Build or verify Aiken v1.1.22
+        working-directory: tool
+        run: uv run equiv-checker compiler build-release --ref v1.1.22 --output ../.ak-equiv/compilers/v1.1.22
+      - name: Build or verify Aiken v1.1.23
+        working-directory: tool
+        run: uv run equiv-checker compiler build-release --ref v1.1.23 --output ../.ak-equiv/compilers/v1.1.23
+      - name: Verify the immutable profile lock
+        working-directory: tool
+        run: uv run equiv-checker profile lock historical-regression-v1.1.22-v1.1.23
+      - name: Run released negative profile and independent replay
+        working-directory: tool
+        run: uv run equiv-checker profile run historical-regression-v1.1.22-v1.1.23 --resume
+      - name: Upload complete negative evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: historical-regression-${{ github.run_id }}
+          path: |
+            .ak-equiv/compilers/v1.1.22/compiler.json
+            .ak-equiv/compilers/v1.1.22/logs/
+            .ak-equiv/compilers/v1.1.23/compiler.json
+            .ak-equiv/compilers/v1.1.23/logs/
+            work/runs/
+          if-no-files-found: error
+
+  local-compiler-build-smoke:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+        with:
+          version: "0.8.13"
+          enable-cache: true
+      - name: Install Python dependencies
+        working-directory: tool
+        run: uv sync --locked
+      - name: Create two clean Aiken worktrees at the locked base
+        run: |
+          git clone --filter=blob:none https://github.com/aiken-lang/aiken.git "$RUNNER_TEMP/aiken-base"
+          git -C "$RUNNER_TEMP/aiken-base" checkout 8949565a9969278846ffefe30bc3b892029dd318
+          git -C "$RUNNER_TEMP/aiken-base" worktree add --detach "$RUNNER_TEMP/aiken-candidate" 8949565a9969278846ffefe30bc3b892029dd318
+      - name: Build release and local interfaces independently
+        working-directory: tool
+        run: |
+          uv run equiv-checker compiler build-release --aiken-source "$RUNNER_TEMP/aiken-base" --ref v1.1.23 --label base --output ../.ak-equiv/compilers/base
+          uv run equiv-checker compiler build-local --aiken-source "$RUNNER_TEMP/aiken-candidate" --label candidate --output ../.ak-equiv/compilers/candidate
+      - name: Compare the same package through compiler manifests
+        working-directory: tool
+        run: >-
+          uv run equiv-checker compare ../fixtures/historical-codegen-equivalent
+          --old-compiler-manifest ../.ak-equiv/compilers/base/compiler.json
+          --new-compiler-manifest ../.ak-equiv/compilers/candidate/compiler.json
+          --strict
+      - name: Upload local compiler provenance
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: local-compiler-build-${{ github.run_id }}
+          path: |
+            .ak-equiv/compilers/base/compiler.json
+            .ak-equiv/compilers/base/logs/
+            .ak-equiv/compilers/candidate/compiler.json
+            .ak-equiv/compilers/candidate/logs/
+            work/runs/
+          if-no-files-found: error
 
   real-smoke:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

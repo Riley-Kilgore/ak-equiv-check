@@ -1,0 +1,56 @@
+{
+  "preamble": {
+    "title": "ak-equiv/historical-codegen-regression",
+    "description": "Released v1.1.22 typed-expect code-generation regression fixture",
+    "version": "0.0.0",
+    "plutusVersion": "v3",
+    "compiler": {
+      "name": "Aiken",
+      "version": "v1.1.23+8949565"
+    },
+    "license": "Apache-2.0"
+  },
+  "validators": [
+    {
+      "title": "typed_expect.typed_expect.mint",
+      "redeemer": {
+        "title": "_redeemer",
+        "schema": {
+          "$ref": "#/definitions/Data"
+        }
+      },
+      "parameters": [
+        {
+          "title": "raw",
+          "schema": {
+            "$ref": "#/definitions/Data"
+          }
+        }
+      ],
+      "compiledCode": "589b010100229800aba2aba1aab9faab9eaab9dab9a48888896600264653001300700198039804000cc01c0092225980099b8748000c01cdd500144cc88cc004004dd60079bae300a3008375400444b30010018a518992cc004cdc3a400060146ea800626464b30013010002899802802980800245900e1bad300e001300b37540031640246018002805a2c8030600e00260066ea801e29344d9590011",
+      "hash": "a53be90996357f0d961a102d61776440e90ac5f2b8b8cf1e11289113"
+    },
+    {
+      "title": "typed_expect.typed_expect.else",
+      "redeemer": {
+        "schema": {}
+      },
+      "parameters": [
+        {
+          "title": "raw",
+          "schema": {
+            "$ref": "#/definitions/Data"
+          }
+        }
+      ],
+      "compiledCode": "589b010100229800aba2aba1aab9faab9eaab9dab9a48888896600264653001300700198039804000cc01c0092225980099b8748000c01cdd500144cc88cc004004dd60079bae300a3008375400444b30010018a518992cc004cdc3a400060146ea800626464b30013010002899802802980800245900e1bad300e001300b37540031640246018002805a2c8030600e00260066ea801e29344d9590011",
+      "hash": "a53be90996357f0d961a102d61776440e90ac5f2b8b8cf1e11289113"
+    }
+  ],
+  "definitions": {
+    "Data": {
+      "title": "Data",
+      "description": "Any Plutus data."
+    }
+  }
+}

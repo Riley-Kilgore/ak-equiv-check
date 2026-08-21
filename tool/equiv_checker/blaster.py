@@ -24,6 +24,103 @@ def _sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def classify_evaluator_output(result: ProcessResult) -> dict[str, Any]:
+    combined = f"{result.stdout}\n{result.stderr}"
+    lowered = combined.lower()
+    json_result: dict[str, Any] | None = None
+    try:
+        decoded = json.loads(result.stdout)
+        if (
+            isinstance(decoded, dict)
+            and isinstance(decoded.get("result"), str)
+            and isinstance(decoded.get("cpu"), int)
+            and not isinstance(decoded.get("cpu"), bool)
+            and decoded["cpu"] >= 0
+            and isinstance(decoded.get("mem"), int)
+            and not isinstance(decoded.get("mem"), bool)
+            and decoded["mem"] >= 0
+        ):
+            json_result = decoded
+    except json.JSONDecodeError:
+        pass
+    result_match = re.search(
+        r"(?:^|\n)Result\s*\n-+\s*\n(.*?)(?=\n\s*Costs\s*\n-+)",
+        combined,
+        flags=re.DOTALL,
+    )
+    cpu_match = re.search(r"(?:^|\n)cpu:\s*(\d+)", combined, flags=re.IGNORECASE)
+    memory_match = re.search(
+        r"(?:^|\n)memory:\s*(\d+)", combined, flags=re.IGNORECASE
+    )
+    has_costs = cpu_match is not None and memory_match is not None
+    if result.timed_out:
+        outcome = "timeout"
+    elif result.exit_code is not None and result.exit_code < 0:
+        outcome = "evaluator_crash"
+    elif result.exit_code == 0 and json_result is not None:
+        outcome = "program_success"
+    elif result.exit_code == 0 and result_match is not None and has_costs:
+        outcome = "program_success"
+    elif "budget" in lowered and any(
+        word in lowered for word in ("exhaust", "exceed", "overspent")
+    ):
+        outcome = "budget_exhausted"
+    elif result.exit_code == 1 and has_costs and re.search(
+        r"(?:^|\n)Error\s*\n-+", combined
+    ):
+        outcome = "program_failure"
+    elif any(
+        word in lowered
+        for word in (
+            "deserialise program",
+            "deserialize program",
+            "decode cbor",
+            "invalid cbor",
+            "failed to parse program",
+        )
+    ):
+        outcome = "decode_error"
+    elif any(
+        word in lowered
+        for word in (
+            "failed to parse argument",
+            "invalid argument",
+            "unexpected argument",
+        )
+    ):
+        outcome = "argument_error"
+    elif "unsupported" in lowered and any(
+        word in lowered for word in ("language", "plutus", "version")
+    ):
+        outcome = "unsupported_language"
+    elif result.exit_code not in {0, 1}:
+        outcome = "evaluator_crash"
+    elif result.exit_code == 0:
+        outcome = "invalid_output"
+    else:
+        outcome = "cli_error"
+    semantic = outcome in {"program_success", "program_failure"}
+    return {
+        "ok": semantic,
+        "outcome": outcome,
+        "result_value": (
+            json_result["result"]
+            if json_result is not None
+            else result_match.group(1).strip()
+            if result_match
+            else None
+        ),
+        "cost": (
+            {"cpu": json_result["cpu"], "memory": json_result["mem"]}
+            if json_result is not None
+            else {"cpu": int(cpu_match.group(1)), "memory": int(memory_match.group(1))}
+            if has_costs
+            else None
+        ),
+        "error_class": None if semantic else outcome,
+    }
+
+
 def parse_result_protocol(
     stdout: str,
     stderr: str,
@@ -175,6 +272,160 @@ class _DataParser:
             raise ValueError(f"trailing rendered Data at offset {self.position}")
         return result
 
+class _SExpressionParser:
+    def __init__(self, text: str):
+        self.text = text
+        self.position = 0
+
+    def _space(self) -> None:
+        while self.position < len(self.text) and self.text[self.position].isspace():
+            self.position += 1
+
+    def value(self) -> Any:
+        self._space()
+        if self.position >= len(self.text):
+            raise ValueError("unexpected end of S-expression")
+        if self.text[self.position] == "(":
+            self.position += 1
+            values: list[Any] = []
+            while True:
+                self._space()
+                if self.position >= len(self.text):
+                    raise ValueError("unterminated S-expression")
+                if self.text[self.position] == ")":
+                    self.position += 1
+                    return values
+                values.append(self.value())
+        if self.text[self.position] == '"':
+            value, consumed = json.JSONDecoder().raw_decode(self.text[self.position :])
+            self.position += consumed
+            return value
+        start = self.position
+        while self.position < len(self.text) and (
+            not self.text[self.position].isspace()
+            and self.text[self.position] not in "()"
+        ):
+            self.position += 1
+        if start == self.position:
+            raise ValueError(f"expected S-expression atom at offset {self.position}")
+        return self.text[start : self.position]
+
+    def parse(self) -> Any:
+        result = self.value()
+        self._space()
+        if self.position != len(self.text):
+            raise ValueError(f"trailing S-expression at offset {self.position}")
+        return result
+
+
+def _lean_name(value: Any) -> str:
+    if not isinstance(value, str):
+        raise ValueError("expected Lean constructor name")
+    return value.rsplit(".", 1)[-1]
+
+
+def _evaluate_lean_data(value: Any, environment: dict[str, Any]) -> Any:
+    if isinstance(value, str):
+        if value in environment:
+            return environment[value]
+        if re.fullmatch(r"-?\d+", value):
+            return int(value)
+        return value
+    if not isinstance(value, list) or not value:
+        raise ValueError("invalid Lean data expression")
+    constructor = _lean_name(value[0])
+    if constructor == "let":
+        if len(value) != 3 or not isinstance(value[1], list):
+            raise ValueError("invalid Lean let expression")
+        local = dict(environment)
+        for binding in value[1]:
+            if not isinstance(binding, list) or len(binding) != 2 or not isinstance(
+                binding[0], str
+            ):
+                raise ValueError("invalid Lean let binding")
+            local[binding[0]] = _evaluate_lean_data(binding[1], local)
+        return _evaluate_lean_data(value[2], local)
+    if constructor == "as":
+        if len(value) >= 2 and _lean_name(value[1]) == "nil":
+            return []
+        raise ValueError("unsupported Lean type ascription")
+    if constructor == "nil":
+        return []
+    if constructor == "cons":
+        if len(value) != 3:
+            raise ValueError("invalid Lean list constructor")
+        tail = _evaluate_lean_data(value[2], environment)
+        if not isinstance(tail, list):
+            raise ValueError("Lean list tail is not a list")
+        return [_evaluate_lean_data(value[1], environment), *tail]
+    if constructor == "I":
+        if len(value) != 2:
+            raise ValueError("invalid Lean Data.I")
+        return {
+            "kind": "data",
+            "variant": "integer",
+            "value": int(_evaluate_lean_data(value[1], environment)),
+        }
+    if constructor == "mk" and "ByteString" in str(value[0]):
+        if len(value) != 2 or not isinstance(value[1], str):
+            raise ValueError("invalid Lean byte string")
+        return value[1].encode("utf-8")
+    if constructor == "B":
+        if len(value) != 2:
+            raise ValueError("invalid Lean Data.B")
+        encoded = _evaluate_lean_data(value[1], environment)
+        if not isinstance(encoded, bytes):
+            raise ValueError("Lean Data.B payload is not bytes")
+        return {"kind": "data", "variant": "bytes", "hex": encoded.hex()}
+    if constructor == "Constr":
+        if len(value) != 3:
+            raise ValueError("invalid Lean Data.Constr")
+        fields = _evaluate_lean_data(value[2], environment)
+        if not isinstance(fields, list):
+            raise ValueError("Lean constructor fields are not a list")
+        return {
+            "kind": "data",
+            "variant": "constructor",
+            "index": int(_evaluate_lean_data(value[1], environment)),
+            "fields": fields,
+        }
+    if constructor == "List":
+        if len(value) != 2:
+            raise ValueError("invalid Lean Data.List")
+        items = _evaluate_lean_data(value[1], environment)
+        if not isinstance(items, list):
+            raise ValueError("Lean Data.List payload is not a list")
+        return {"kind": "data", "variant": "list", "items": items}
+    if constructor == "mk" and "Prod" in str(value[0]):
+        if len(value) != 3:
+            raise ValueError("invalid Lean pair")
+        return (
+            _evaluate_lean_data(value[1], environment),
+            _evaluate_lean_data(value[2], environment),
+        )
+    if constructor == "Map":
+        if len(value) != 2:
+            raise ValueError("invalid Lean Data.Map")
+        entries = _evaluate_lean_data(value[1], environment)
+        if not isinstance(entries, list) or not all(
+            isinstance(entry, tuple) and len(entry) == 2 for entry in entries
+        ):
+            raise ValueError("Lean Data.Map payload is not a pair list")
+        return {
+            "kind": "data",
+            "variant": "map",
+            "entries": [{"key": key, "value": item} for key, item in entries],
+        }
+    raise ValueError(f"unsupported Lean data constructor: {value[0]}")
+
+
+def _parse_lean_data(rendered: str) -> dict[str, Any]:
+    value = _evaluate_lean_data(_SExpressionParser(rendered).parse(), {})
+    if not isinstance(value, dict) or value.get("kind") != "data":
+        raise ValueError("Lean witness is not Plutus Data")
+    return value
+
+
 def _normalize_lean_data(rendered: str) -> str:
     value = re.sub(
         r"[A-Za-z0-9_.]*Data\.(Constr|Map|List|I|B)\b",
@@ -204,7 +455,10 @@ def _parse_witness_value(rendered: str) -> dict[str, Any]:
     try:
         parsed = _DataParser(_normalize_lean_data(value)).parse()
     except (ValueError, UnicodeError, json.JSONDecodeError):
-        return {"kind": "lean_display", "rendered": value}
+        try:
+            parsed = _parse_lean_data(value)
+        except (ValueError, UnicodeError, json.JSONDecodeError):
+            return {"kind": "lean_display", "rendered": value}
     return parsed | {"rendered": value}
 
 
@@ -486,6 +740,11 @@ def _source_parts(
         *conversion,
         "",
         *observation_defs,
+        "def completedWithinBound : State → Bool",
+        "  | .Halt _ => true",
+        "  | .Error => true",
+        "  | _ => false",
+        "",
         "",
         f"#prep_uplc oldPrepared oldProgram modelInputs {runtime_step_bound}",
         f"#prep_uplc newPrepared newProgram modelInputs {runtime_step_bound}",
@@ -535,9 +794,59 @@ def _source_parts(
                 "",
             ]
         )
+    completion: dict[str, dict[str, Any]] = {}
+    for label in ("old", "new"):
+        completion_theorem = (
+            f"∀ {binders}, {input_model.domain_expression} → "
+            f"(completedWithinBound ({label}Prepared.prop {arguments}) = true)"
+        )
+        completion_hash = _sha256_text(
+            _stable_json(
+                {
+                    "completion": completion_theorem,
+                    "profile": input_model.to_dict(),
+                    "runtime_step_bound": runtime_step_bound,
+                }
+            )
+        )
+
+        def completion_source(status: str, expected_code: int) -> str:
+            return "\n".join(
+                [
+                    *preparation,
+                    f"#blaster {options} (solve-result: {expected_code}) [{completion_theorem}]",
+                    _lean_marker(
+                        status=status,
+                        pair_id=pair.pair_id,
+                        theorem_hash=completion_hash,
+                        profile=input_model.profile,
+                        kind=f"{label}_program_completion",
+                    ),
+                    "",
+                    f"end {namespace}",
+                    "",
+                ]
+            )
+
+        completion[label] = {
+            "theorem": completion_theorem,
+            "theorem_hash": completion_hash,
+            "valid": completion_source("valid", 0),
+            "falsified": completion_source("falsified", 1),
+            "inconclusive": completion_source("inconclusive", 2),
+        }
+
 
     non_vacuity_source: str | None = None
     non_vacuity_hash: str | None = None
+    raw_non_vacuity_hash = _sha256_text(
+        _stable_json(
+            {
+                "non_vacuity": f"∃ {binders}, {input_model.domain_expression}",
+                "profile": input_model.to_dict(),
+            }
+        )
+    )
     if input_model.domain_expression != "True":
         emptiness = f"∀ {binders}, ¬({input_model.domain_expression})"
         non_vacuity_hash = _sha256_text(
@@ -569,7 +878,13 @@ def _source_parts(
         "theorem": theorem,
         "theorem_hash": theorem_hash,
         "non_vacuity": non_vacuity_source,
-        "non_vacuity_hash": non_vacuity_hash,
+        "non_vacuity_hash": non_vacuity_hash or raw_non_vacuity_hash,
+        "non_vacuity_method": (
+            "solver_falsification_of_domain_emptiness"
+            if non_vacuity_source is not None
+            else "lean_elaboration_of_concrete_witness"
+        ),
+        "completion": completion,
         "options": {
             "random_seed": random_seed,
             "solver_timeout_seconds": solver_timeout,
@@ -698,7 +1013,7 @@ class RealBlasterBackend:
         source_path.write_text(source, encoding="utf-8")
         source_hash = _sha256_text(source)
         result = run_process(
-            ["lean", source_path.resolve()],
+            ["lean", "-s", "131072", source_path.resolve()],
             output_root,
             timeout,
             environment={
@@ -760,6 +1075,33 @@ class RealBlasterBackend:
             )
 
         phase_records: list[dict[str, Any]] = []
+        proof_obligations: dict[str, Any] = {
+            "domain_non_vacuity": {
+                "status": (
+                    "proven"
+                    if parts["non_vacuity_method"]
+                    == "lean_elaboration_of_concrete_witness"
+                    else "pending"
+                ),
+                "theorem_hash": parts["non_vacuity_hash"],
+                "method": parts["non_vacuity_method"],
+            },
+            "old_program_completion": {
+                "status": "pending",
+                "theorem_hash": parts["completion"]["old"]["theorem_hash"],
+                "runtime_step_bound": self.config.runtime_step_bound,
+            },
+            "new_program_completion": {
+                "status": "pending",
+                "theorem_hash": parts["completion"]["new"]["theorem_hash"],
+                "runtime_step_bound": self.config.runtime_step_bound,
+            },
+            "observational_equivalence": {
+                "status": "pending",
+                "theorem_hash": parts["theorem_hash"],
+                "runtime_step_bound": self.config.runtime_step_bound,
+            },
+        }
         total_duration = 0.0
         profile_tag = re.sub(r"[^A-Za-z0-9_.-]+", "-", input_model.profile)
         basic_stages = (
@@ -842,6 +1184,111 @@ class RealBlasterBackend:
                     error="ledger domain emptiness was not falsified",
                 )
             record["domain_witness"] = extract_witness(result.stdout, result.stderr)
+            proof_obligations["domain_non_vacuity"] |= {
+                "status": "proven",
+                "witness": record["domain_witness"],
+            }
+
+        completion_proven = True
+        for label in ("old", "new"):
+            completion_final: tuple[
+                ProcessResult, dict[str, Any], Path, str, dict[str, Any]
+            ] | None = None
+            completion_parts = parts["completion"][label]
+            for expected_status, stage in (
+                ("valid", f"{label}-program-completion-valid"),
+                ("falsified", f"{label}-program-completion-falsified"),
+                ("inconclusive", f"{label}-program-completion-inconclusive"),
+            ):
+                result, record, source_path, source_hash = self._run_stage(
+                    pair,
+                    f"{profile_tag}-{stage}",
+                    completion_parts[expected_status],
+                    self.config.timeouts.lean_elaboration + self.config.timeouts.z3,
+                    output_root,
+                    parts["options"]
+                    | {
+                        "expected_result": expected_status,
+                        "proof_obligation": f"{label}_program_completion",
+                    },
+                )
+                phase_records.append(record)
+                total_duration += result.duration_seconds
+                if result.timed_out:
+                    return BlasterResult(
+                        status="blaster_timeout",
+                        command=result.command,
+                        exit_code=result.exit_code,
+                        duration_seconds=round(total_duration, 6),
+                        stdout_path=record["stdout_path"],
+                        stderr_path=record["stderr_path"],
+                        generated_lean_path=record["generated_lean_path"],
+                        generated_lean_sha256=source_hash,
+                        phase_results=phase_records,
+                        proof_obligations=proof_obligations,
+                        error=f"{label} completion proof timed out",
+                    )
+                if result.exit_code != 0:
+                    continue
+                try:
+                    marker = parse_result_protocol(
+                        result.stdout,
+                        result.stderr,
+                        exit_code=result.exit_code,
+                        expected_pair_id=pair.pair_id,
+                        expected_theorem_hash=completion_parts["theorem_hash"],
+                    )
+                except ValueError as error:
+                    return BlasterResult(
+                        status="blaster_error",
+                        command=result.command,
+                        exit_code=result.exit_code,
+                        duration_seconds=round(total_duration, 6),
+                        stdout_path=record["stdout_path"],
+                        stderr_path=record["stderr_path"],
+                        generated_lean_path=record["generated_lean_path"],
+                        generated_lean_sha256=source_hash,
+                        phase_results=phase_records,
+                        proof_obligations=proof_obligations,
+                        error=str(error),
+                    )
+                if marker["status"] != expected_status:
+                    return BlasterResult(
+                        status="blaster_error",
+                        command=result.command,
+                        exit_code=result.exit_code,
+                        duration_seconds=round(total_duration, 6),
+                        phase_results=phase_records,
+                        proof_obligations=proof_obligations,
+                        error="completion marker conflicts with expected solver trial",
+                    )
+                completion_final = result, record, source_path, source_hash, marker
+                break
+            if completion_final is None:
+                last = phase_records[-1]
+                return BlasterResult(
+                    status="blaster_error",
+                    command=last["command"],
+                    exit_code=last["exit_code"],
+                    duration_seconds=round(total_duration, 6),
+                    stdout_path=last["stdout_path"],
+                    stderr_path=last["stderr_path"],
+                    generated_lean_path=last["generated_lean_path"],
+                    generated_lean_sha256=last["generated_lean_sha256"],
+                    phase_results=phase_records,
+                    proof_obligations=proof_obligations,
+                    error=f"no {label} completion solver trial produced a protocol marker",
+                )
+            completion_status = completion_final[4]["status"]
+            proof_obligations[f"{label}_program_completion"] |= {
+                "status": "proven" if completion_status == "valid" else completion_status,
+                "generated_lean_path": completion_final[2]
+                .relative_to(output_root)
+                .as_posix(),
+                "generated_lean_sha256": completion_final[3],
+            }
+            completion_proven = completion_proven and completion_status == "valid"
+
 
         final: tuple[ProcessResult, dict[str, Any], Path, str, dict[str, Any]] | None = None
         for expected_status, stage in (
@@ -931,12 +1378,24 @@ class RealBlasterBackend:
             solver_path.write_text(solver_text, encoding="utf-8")
             solver_hash = _sha256_text(solver_text)
         protocol_status = marker["status"]
+        proof_obligations["observational_equivalence"]["status"] = protocol_status
         status = {
-            "valid": "bounded_equivalent",
+            "valid": "blaster_valid" if completion_proven else "bounded_equivalent",
             "falsified": "blaster_falsified_unreplayed",
             "inconclusive": "blaster_inconclusive",
         }[protocol_status]
-        witness = extract_witness(result.stdout, result.stderr) if protocol_status == "falsified" else None
+        witness = (
+            extract_witness(result.stdout, result.stderr)
+            if protocol_status == "falsified"
+            else None
+        )
+        if witness is not None:
+            witness |= {
+                "protocol": "EQUIV_WITNESS_V1",
+                "pair_id": pair.pair_id,
+                "theorem_hash": parts["theorem_hash"],
+            }
+            witness["witness_sha256"] = _sha256_text(_stable_json(witness))
         return BlasterResult(
             status=status,
             command=result.command,
@@ -950,6 +1409,7 @@ class RealBlasterBackend:
             solver_input_sha256=solver_hash,
             witness=witness,
             phase_results=phase_records,
+            proof_obligations=proof_obligations,
             error=(
                 "equivalent only within the recorded CEK runtime step bound"
                 if status == "bounded_equivalent"
@@ -982,15 +1442,8 @@ class RealBlasterBackend:
         stdout_path = output_root / "counterexamples" / f"{pair.pair_id}-{label}.stdout.log"
         stderr_path = output_root / "counterexamples" / f"{pair.pair_id}-{label}.stderr.log"
         write_process_logs(result, stdout_path, stderr_path)
-        parsed: dict[str, Any] | None = None
-        if not result.timed_out and result.exit_code == 0:
-            try:
-                candidate = json.loads(result.stdout)
-                parsed = candidate if isinstance(candidate, dict) else None
-            except json.JSONDecodeError:
-                parsed = None
-        return {
-            "ok": not result.timed_out and result.exit_code in {0, 1} and (result.exit_code != 0 or parsed is not None),
+        classification = classify_evaluator_output(result)
+        return classification | {
             "command": command,
             "exit_code": result.exit_code,
             "timed_out": result.timed_out,
@@ -999,18 +1452,7 @@ class RealBlasterBackend:
             "stderr_path": stderr_path.relative_to(output_root).as_posix(),
             "stdout_sha256": hashlib.sha256(result.stdout.encode("utf-8")).hexdigest(),
             "stderr_sha256": hashlib.sha256(result.stderr.encode("utf-8")).hexdigest(),
-            "result_value": parsed.get("result") if parsed else None,
-            "cost": {"cpu": parsed.get("cpu"), "memory": parsed.get("mem")} if parsed else None,
             "trace": [],
-            "error_class": (
-                "timeout"
-                if result.timed_out
-                else None
-                if result.exit_code == 0 and parsed is not None
-                else "evaluation_failure"
-                if result.exit_code == 1
-                else "malformed_evaluator_output"
-            ),
         }
 
     def replay(
@@ -1024,6 +1466,22 @@ class RealBlasterBackend:
         values = witness.get("values")
         if evaluator is None:
             return {"confirmed": False, "reason": "independent evaluator is not configured"}
+        if witness.get("protocol") != "EQUIV_WITNESS_V1":
+            return {"confirmed": False, "reason": "witness protocol is missing or unsupported"}
+        if witness.get("pair_id") != pair.pair_id:
+            return {"confirmed": False, "reason": "witness pair ID does not match the script pair"}
+        old_path, new_path = self._stable_inputs(pair, output_root)
+        expected_theorem_hash = _source_parts(
+            pair,
+            input_model,
+            self.config.runtime_step_bound,
+            self.config.random_seed,
+            max(1, int(self.config.timeouts.z3)),
+            old_path,
+            new_path,
+        )["theorem_hash"]
+        if witness.get("theorem_hash") != expected_theorem_hash:
+            return {"confirmed": False, "reason": "witness theorem hash does not match the theorem"}
         if not isinstance(values, dict):
             return {"confirmed": False, "reason": "witness has no structured values"}
         missing = [name for name in input_model.argument_order if name not in values]
@@ -1039,6 +1497,7 @@ class RealBlasterBackend:
             "protocol": "EQUIV_REPLAY_ARGUMENTS_V1",
             "pair_id": pair.pair_id,
             "profile": input_model.profile,
+            "theorem_hash": expected_theorem_hash,
             "argument_order": list(input_model.argument_order),
             "arguments": encoded,
         }
@@ -1046,21 +1505,33 @@ class RealBlasterBackend:
         old = self._evaluate_script(pair, "old", encoded, output_root)
         new = self._evaluate_script(pair, "new", encoded, output_root)
         if input_model.kind.startswith("validator"):
-            old_observation = "success" if old.get("exit_code") == 0 else "failure" if old.get("exit_code") == 1 else None
-            new_observation = "success" if new.get("exit_code") == 0 else "failure" if new.get("exit_code") == 1 else None
+            old_observation = (
+                "success"
+                if old.get("outcome") == "program_success"
+                else "failure"
+                if old.get("outcome") == "program_failure"
+                else None
+            )
+            new_observation = (
+                "success"
+                if new.get("outcome") == "program_success"
+                else "failure"
+                if new.get("outcome") == "program_failure"
+                else None
+            )
         else:
             old_observation = (
                 {"kind": "returned", "value": old.get("result_value")}
-                if old.get("exit_code") == 0
+                if old.get("outcome") == "program_success"
                 else {"kind": "evaluation_failure"}
-                if old.get("exit_code") == 1
+                if old.get("outcome") == "program_failure"
                 else None
             )
             new_observation = (
                 {"kind": "returned", "value": new.get("result_value")}
-                if new.get("exit_code") == 0
+                if new.get("outcome") == "program_success"
                 else {"kind": "evaluation_failure"}
-                if new.get("exit_code") == 1
+                if new.get("outcome") == "program_failure"
                 else None
             )
         confirmed = (
@@ -1073,6 +1544,9 @@ class RealBlasterBackend:
         replay = {
             "schema_version": 1,
             "confirmed": confirmed,
+            "pair_id": pair.pair_id,
+            "theorem_hash": expected_theorem_hash,
+            "witness_sha256": witness.get("witness_sha256"),
             "reason": None if confirmed else "independent replay did not confirm distinct observations",
             "evaluator": evaluator.identity(),
             "evaluation_limits": evaluator.evaluation_limits,

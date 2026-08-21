@@ -49,6 +49,15 @@ def _raw_data_witness(names: tuple[str, ...]) -> dict[str, object]:
 
 
 def _raw_argument_names(pair: ScriptPair) -> tuple[str, ...]:
+    abi = pair.abi
+    if (
+        abi.get("verified") is True
+        and abi.get("equal") is True
+        and isinstance(abi.get("old"), dict)
+    ):
+        order = abi["old"].get("argument_order")
+        if isinstance(order, list) and all(isinstance(name, str) for name in order):
+            return tuple(order)
     parameters = tuple(f"parameter{index}" for index, _ in enumerate(pair.parameters))
     normalized = pair.plutus_version.lower().removeprefix("plutus").removeprefix("v")
     if normalized == "3":
@@ -62,12 +71,23 @@ def _raw_argument_names(pair: ScriptPair) -> tuple[str, ...]:
 
 def raw_validator_input_model(pair: ScriptPair) -> InputModel:
     names = _raw_argument_names(pair)
-    supported = bool(names) and not (
-        pair.plutus_version.lower() not in {"v3", "3", "plutusv3"}
-        and pair.purpose in {"fallback", "voting", "proposing"}
+    abi_verified = (
+        not pair.abi
+        or pair.abi.get("verified") is True
+        and pair.abi.get("equal") is True
+    )
+    supported = (
+        bool(names)
+        and abi_verified
+        and not (
+            pair.plutus_version.lower() not in {"v3", "3", "plutusv3"}
+            and pair.purpose in {"fallback", "voting", "proposing"}
+        )
     )
     reason = None
-    if not supported:
+    if not abi_verified:
+        reason = "old and new compiled UPLC ABIs are not verified and equal"
+    elif not supported:
         reason = (
             "fallback or governance arity is not uniquely defined for pre-V3 compiled scripts"
             if pair.purpose in {"fallback", "voting", "proposing"}

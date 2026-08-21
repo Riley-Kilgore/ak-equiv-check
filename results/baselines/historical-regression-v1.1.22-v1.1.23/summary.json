@@ -1,0 +1,33 @@
+{
+  "counts": {
+    "bounded_results": 0,
+    "byte_identical_pairs": 0,
+    "confirmed_non_equivalent_results": 2,
+    "inconclusive_results": 0,
+    "non_identical_pairs": 2,
+    "strict_complete_equivalence_results": 0,
+    "total_generated_validator_pairs": 2
+  },
+  "gaps": [],
+  "profile": {
+    "expectation_matched": true,
+    "expected_strict_result": "fail",
+    "profile_expectation": "confirmed_non_equivalent",
+    "profile_id": "historical-regression-v1.1.22-v1.1.23",
+    "profile_name": "historical-regression",
+    "profile_pass": true,
+    "semantic_status": "confirmed_non_equivalent",
+    "semantic_statuses": [
+      "confirmed_non_equivalent",
+      "confirmed_non_equivalent"
+    ],
+    "semantic_strict_result": "fail"
+  },
+  "run_id": "f0ca28451b6c98b7c70316813d71dfb94b8f87742ffd5e425be97e3aecae2a6f",
+  "schema_version": 1,
+  "script_difference_observed": true,
+  "status_counts": {
+    "confirmed_non_equivalent": 2
+  },
+  "strict_pass": false
+}

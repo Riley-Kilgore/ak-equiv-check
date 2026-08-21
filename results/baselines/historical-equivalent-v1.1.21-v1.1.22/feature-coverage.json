@@ -1,0 +1,69 @@
+{
+  "historical_codegen_triggers": [
+    {
+      "expected_compiler_change": "v1.1.22 simplifies comparison-with-True forms",
+      "feature_id": "historical.boolean_comparison_constant",
+      "hashes_differ": true,
+      "language_construct": "Boolean comparison against a constant",
+      "new_compiled_code_sha256": "a21d202bedc9762a76eebdea7646d26b41acdee03d789984a1273a79d437fbca",
+      "old_compiled_code_sha256": "1236efc79ab6331b3aa3d29474b92ddc38c20da2a8e35fdd79aaeae2ded19e49",
+      "source_location": "validators/boolean_comparison.ak:6",
+      "validator_pair_id": "boolean_comparison-minting-aec0071a0dd0a8f6",
+      "validator_title": "boolean_comparison.boolean_comparison.mint"
+    },
+    {
+      "expected_compiler_change": "v1.1.22 rewrites subtraction to addition by a negated constant",
+      "feature_id": "historical.subtraction_constant",
+      "hashes_differ": true,
+      "language_construct": "Subtraction by a constant",
+      "new_compiled_code_sha256": "89aab6324bfff67532975455fbe72bedd86eafd31c7ccc42f88845e4c5595012",
+      "old_compiled_code_sha256": "d6a42ca69d53af7830f29ab36813caccb47cd306c537cb60a2c6f6fa6d8ec9da",
+      "source_location": "validators/subtraction.ak:6",
+      "validator_pair_id": "subtraction-minting-37702b02c81cd9fb",
+      "validator_title": "subtraction.subtraction.mint"
+    },
+    {
+      "expected_compiler_change": "v1.1.22 swaps constant operands into the preferred code-generation position",
+      "feature_id": "historical.symmetric_constant_operand",
+      "hashes_differ": true,
+      "language_construct": "Symmetric operation with one constant operand",
+      "new_compiled_code_sha256": "c88121a4879b993307fed256bd3adf862b3f2faa9afca588527e7858278d85f2",
+      "old_compiled_code_sha256": "b072505980b95e4168667b65ab62d4e885fe957dcbad319019d00ed0ff872aac",
+      "source_location": "validators/symmetric.ak:6",
+      "validator_pair_id": "symmetric-minting-494bb22795171165",
+      "validator_title": "symmetric.symmetric.mint"
+    }
+  ],
+  "historical_coverage_claims": {
+    "byte_identical_script_feature_ids": [],
+    "excluded_contracts": [
+      {
+        "contract": "corpus/aiken_language_features_v1_1_23.json",
+        "reason": "The v1.1.23 feature contract is not evidence about the shared v1.1.21-v1.1.22 language subset.",
+        "state": "not_applied_newer_release_contract"
+      }
+    ],
+    "non_identical_script_feature_ids": [
+      "historical.boolean_comparison_constant",
+      "historical.subtraction_constant",
+      "historical.symmetric_constant_operand"
+    ],
+    "uncovered_shared_feature_ids": []
+  },
+  "historical_shared_feature_contract": {
+    "acceptance_evidence": "Both locked release compilers built every linked validator from the same source and dependency lock.",
+    "feature_ids": [
+      "historical.boolean_comparison_constant",
+      "historical.subtraction_constant",
+      "historical.symmetric_constant_operand"
+    ],
+    "new_ref": "v1.1.22",
+    "old_ref": "v1.1.21",
+    "scope": "historical fixture constructs only",
+    "status": "shared_subset_verified"
+  },
+  "mode": "package",
+  "record_count": 0,
+  "records": [],
+  "schema_version": 2
+}

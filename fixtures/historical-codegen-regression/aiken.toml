@@ -1,0 +1,11 @@
+name = "ak-equiv/historical-codegen-regression"
+version = "0.0.0"
+compiler = "v1.1.22"
+plutus = "v3"
+license = "Apache-2.0"
+description = "Released v1.1.22 typed-expect code-generation regression fixture"
+
+[[dependencies]]
+name = "aiken-lang/stdlib"
+version = "v3.1.0"
+source = "github"

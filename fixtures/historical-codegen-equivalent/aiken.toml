@@ -1,0 +1,11 @@
+name = "ak-equiv/historical-codegen-equivalent"
+version = "0.0.0"
+compiler = "v1.1.21"
+plutus = "v3"
+license = "Apache-2.0"
+description = "Released v1.1.21 to v1.1.22 code-generation equivalence fixture"
+
+[[dependencies]]
+name = "aiken-lang/stdlib"
+version = "v3.1.0"
+source = "github"

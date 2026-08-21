@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "profiles": [
+    {
+      "id": "historical-equivalent-v1.1.21-v1.1.22",
+      "name": "historical-equivalent",
+      "kind": "historical",
+      "old_ref": "v1.1.21",
+      "new_ref": "v1.1.22",
+      "fixture": "fixtures/historical-codegen-equivalent",
+      "require_script_difference": true,
+      "expected_semantic_status": "equivalent_under_raw_model",
+      "expected_strict_result": "pass"
+    },
+    {
+      "id": "historical-regression-v1.1.22-v1.1.23",
+      "name": "historical-regression",
+      "kind": "historical",
+      "old_ref": "v1.1.22",
+      "new_ref": "v1.1.23",
+      "fixture": "fixtures/historical-codegen-regression",
+      "require_script_difference": true,
+      "expected_semantic_status": "confirmed_non_equivalent",
+      "expected_strict_result": "fail"
+    },
+    {
+      "id": "local-candidate",
+      "name": "local-candidate",
+      "kind": "local",
+      "old_ref": "v1.1.23",
+      "new_ref": null,
+      "fixture": "sentinel",
+      "feature_contract": "corpus/aiken_language_features_v1_1_23.json",
+      "require_script_difference": false,
+      "expected_semantic_status": null,
+      "expected_strict_result": null
+    }
+  ]
+}

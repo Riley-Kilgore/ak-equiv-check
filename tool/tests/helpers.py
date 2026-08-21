@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import stat
 from pathlib import Path
@@ -36,7 +37,10 @@ def validator(
         "title": title,
         "redeemer": {"title": "redeemer", "schema": {}},
         "compiledCode": compiled_code,
-        "hash": "00" * 28,
+        "hash": hashlib.blake2b(
+            b"\x03" + bytes.fromhex(compiled_code),
+            digest_size=28,
+        ).hexdigest(),
     }
     if parameters is not None:
         row["parameters"] = parameters
@@ -53,7 +57,23 @@ def write_fake_compiler(
     uplc_exit_code: int = 0,
     blueprint_mode: str = "valid",
 ) -> Path:
-    payload = json.dumps({"preamble": {}, "validators": validators, "definitions": {}})
+    payload = json.dumps(
+        {
+            "preamble": {
+                "title": "test/package",
+                "description": "Test package",
+                "version": "0.0.0",
+                "license": "Apache-2.0",
+                "compiler": {
+                    "name": "Aiken",
+                    "version": version.removeprefix("aiken "),
+                },
+                "plutusVersion": "v3",
+            },
+            "validators": validators,
+            "definitions": {},
+        }
+    )
     source = f'''#!/usr/bin/env python3
 # binary-label: {path.name}
 import json
