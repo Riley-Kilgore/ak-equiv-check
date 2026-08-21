@@ -1,6 +1,7 @@
 {
   "algorithm": "sha256",
   "files": {
+    "ci-provenance.json": "7dd56ed2cb753c3a3ba3118073c554500f046f35573c8ea5698625befa1f63e9",
     "compiler-lock.json": "478d03ad4815cf1a19d8f63cf8ec8a5a9e7acd49c4e32fa16b29390ed1249269",
     "environment.json": "39588221a6e5729e73c9461bd75203fc8038563fa2ebbba334ba64e98fd7182c",
     "feature-coverage.json": "0d93e2d723d7042798fe02274373ecbbd019a0c1960ef413f06fe2c0d2389d61",
@@ -8,6 +9,7 @@
     "source-lock.json": "21884290185d0434757ba1e8931aa38f4433c3944501dd387e19d5190344d326",
     "source-provenance.json": "e069743e818588666f610d911fe8f42117fb16a1608ade13218d92dcdadca465",
     "summary.json": "32f28638494d73eb11e9ba9210df9ef65d2561417a4726ff4bc19e6da0f367f4",
+    "summary.md": "50d4d0869cef4f8a36330814d61b21839a14d152cb5872713304883aac9d9349",
     "task-results.ndjson": "c3c26fcb2035983d771c4934ba2af0a89a9186127d2ce0bfb353fbc3ccb9a42e"
   },
   "schema_version": 1

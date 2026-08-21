@@ -1,0 +1,34 @@
+{
+  "artifact": {
+    "api_url": "https://api.github.com/repos/Riley-Kilgore/ak-equiv-check/actions/artifacts/9456723806",
+    "digest": "sha256:32a28b9321dd3c1df870f9e689fd11d64ac8d12be90002238863ab176c314157",
+    "expires_at": "2026-11-19T17:34:18Z",
+    "id": 9456723806,
+    "name": "historical-equivalent-32508847798",
+    "size_in_bytes": 506111
+  },
+  "attestation_kind": "public_ci_reproduction",
+  "baseline_run_id": "b27a2f8414f29421978579cef8e3ed90b1b6d028bd49a14eb62d08848af1b899",
+  "job": {
+    "conclusion": "success",
+    "id": 96855047079,
+    "name": "historical-equivalent",
+    "url": "https://github.com/Riley-Kilgore/ak-equiv-check/actions/runs/32508847798/job/96855047079"
+  },
+  "observed_profile_result": {
+    "expectation_matched": true,
+    "profile_pass": true,
+    "semantic_status": "equivalent_under_raw_model",
+    "semantic_strict_result": "pass"
+  },
+  "profile_id": "historical-equivalent-v1.1.21-v1.1.22",
+  "relationship": "independent_reproduction_of_locked_profile",
+  "schema_version": 1,
+  "workflow_run": {
+    "conclusion": "success",
+    "head_sha": "254c86090434d427ad330713d1d201708ec18e97",
+    "id": 32508847798,
+    "name": "equivalence-checker",
+    "url": "https://github.com/Riley-Kilgore/ak-equiv-check/actions/runs/32508847798"
+  }
+}

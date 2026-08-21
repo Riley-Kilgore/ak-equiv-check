@@ -1,6 +1,7 @@
 {
   "algorithm": "sha256",
   "files": {
+    "ci-provenance.json": "53bd70f9a60c633898c5a6b7ffaee4bdb55c036f0009b5087b6a55badf7df1aa",
     "compiler-lock.json": "f4bce1f6706ac24353c3c3f205e2f5f7deddf5e2e9a5adb686e6feb74d3310e3",
     "environment.json": "39588221a6e5729e73c9461bd75203fc8038563fa2ebbba334ba64e98fd7182c",
     "feature-coverage.json": "21e076556a27d648ec5400a09004d757e1fc76062ff0178c1879fa94033e1f03",
@@ -8,6 +9,7 @@
     "source-lock.json": "770f7bb2d6b57baf56643776775fb621096dda229221bcde2a9f092fbe882ac8",
     "source-provenance.json": "f4ccde512a2e4766e0035e585e45033134c1ded8980e4a51e3727678af817bfb",
     "summary.json": "dec2ec0593ed722d0d104e3851b8b9e82f3475beadb425fe4cd9ef443598a294",
+    "summary.md": "466ae2499ed057854ebf6655e10a575e1ab07e26f1d7ebcf53ace6017d521c9f",
     "task-results.ndjson": "6b4198134bbd219baedf0291728bff7f81943f84e64ab932547b1014a88ffeee"
   },
   "schema_version": 1

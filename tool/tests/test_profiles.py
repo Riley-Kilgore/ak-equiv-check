@@ -159,6 +159,55 @@ class HistoricalBaselineTests(unittest.TestCase):
                     if path.is_file():
                         self.assertNotIn(str(ROOT), path.read_text())
 
+    def test_compact_baselines_include_human_and_ci_provenance(self) -> None:
+        expected = {
+            "historical-equivalent-v1.1.21-v1.1.22": {
+                "artifact_id": 9456723806,
+                "artifact_name": "historical-equivalent-32508847798",
+                "job": "historical-equivalent",
+            },
+            "historical-regression-v1.1.22-v1.1.23": {
+                "artifact_id": 9457392993,
+                "artifact_name": "historical-regression-32508847798",
+                "job": "historical-regression",
+            },
+        }
+        required = {
+            "ci-provenance.json",
+            "compiler-lock.json",
+            "source-lock.json",
+            "environment.json",
+            "task-results.ndjson",
+            "pair-results.ndjson",
+            "feature-coverage.json",
+            "summary.json",
+            "summary.md",
+            "checksums.json",
+        }
+        for name, evidence in expected.items():
+            with self.subTest(name=name):
+                root = BASELINES / name
+                self.assertTrue(required.issubset(path.name for path in root.iterdir()))
+                summary_markdown = (root / "summary.md").read_text()
+                self.assertIn(f"`{name}`", summary_markdown)
+                provenance = json.loads((root / "ci-provenance.json").read_text())
+                self.assertEqual(provenance["profile_id"], name)
+                self.assertEqual(
+                    provenance["attestation_kind"], "public_ci_reproduction"
+                )
+                self.assertEqual(provenance["workflow_run"]["conclusion"], "success")
+                self.assertEqual(provenance["job"]["name"], evidence["job"])
+                self.assertEqual(provenance["job"]["conclusion"], "success")
+                self.assertEqual(
+                    provenance["artifact"]["id"], evidence["artifact_id"]
+                )
+                self.assertEqual(
+                    provenance["artifact"]["name"], evidence["artifact_name"]
+                )
+                self.assertRegex(
+                    provenance["artifact"]["digest"], r"^sha256:[0-9a-f]{64}$"
+                )
+
     def test_compact_baselines_match_current_fixture_sources(self) -> None:
         names = (
             "historical-equivalent-v1.1.21-v1.1.22",

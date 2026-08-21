@@ -28,6 +28,63 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _summary_markdown(summary: dict[str, Any]) -> str:
+    profile = summary["profile"]
+    counts = summary["counts"]
+    lines = [
+        f"# {profile['profile_name']}",
+        "",
+        f"- Profile ID: `{profile['profile_id']}`",
+        f"- Semantic status: `{profile['semantic_status']}`",
+        f"- Semantic strict result: `{profile['semantic_strict_result']}`",
+        f"- Profile expectation: `{profile['profile_expectation']}`",
+        f"- Expectation matched: `{str(profile['expectation_matched']).lower()}`",
+        f"- Profile pass: `{str(profile['profile_pass']).lower()}`",
+        f"- Script difference observed: `{str(summary['script_difference_observed']).lower()}`",
+        "",
+        "## Counts",
+        "",
+        "| Metric | Count |",
+        "| --- | ---: |",
+    ]
+    lines.extend(
+        f"| `{name}` | {count} |" for name, count in sorted(counts.items())
+    )
+    lines.extend(["", "## Remaining gaps", ""])
+    if summary["gaps"]:
+        lines.extend(f"- `{gap}`" for gap in summary["gaps"])
+    else:
+        lines.append("None.")
+    return "\n".join(lines) + "\n"
+
+
+def _ci_provenance(
+    value: dict[str, Any],
+    *,
+    profile_id: str,
+    baseline_run_id: str,
+) -> dict[str, Any]:
+    if value.get("schema_version") != 1:
+        raise ValueError("CI provenance must use schema_version 1")
+    if value.get("profile_id") != profile_id:
+        raise ValueError("CI provenance profile does not match the baseline")
+    if value.get("attestation_kind") != "public_ci_reproduction":
+        raise ValueError("CI provenance must attest a public CI reproduction")
+    for field in ("workflow_run", "job", "artifact"):
+        if not isinstance(value.get(field), dict):
+            raise ValueError(f"CI provenance is missing {field}")
+    if value["workflow_run"].get("conclusion") != "success":
+        raise ValueError("CI workflow reproduction did not succeed")
+    if value["job"].get("conclusion") != "success":
+        raise ValueError("CI profile job did not succeed")
+    digest = value["artifact"].get("digest")
+    if not isinstance(digest, str) or not digest.startswith("sha256:"):
+        raise ValueError("CI artifact digest must be a SHA-256 digest")
+    result = dict(value)
+    result["baseline_run_id"] = baseline_run_id
+    return result
+
+
 def _profile(identifier: str) -> dict[str, Any]:
     registry = _read(PROFILE_REGISTRY)
     matches = [
@@ -140,7 +197,12 @@ def _compact_pair(row: dict[str, Any], run: Path) -> dict[str, Any]:
     }
 
 
-def capture(run: Path, output: Path, identifier: str) -> None:
+def capture(
+    run: Path,
+    output: Path,
+    identifier: str,
+    ci_provenance_path: Path,
+) -> None:
     run = run.expanduser().resolve()
     output = output.expanduser().resolve()
     profile = _profile(identifier)
@@ -148,6 +210,11 @@ def capture(run: Path, output: Path, identifier: str) -> None:
     if profile_result["profile_id"] != profile["id"]:
         raise ValueError("profile result does not match the requested profile")
     summary = _read(run / "summary.json")
+    ci_provenance = _ci_provenance(
+        _read(ci_provenance_path.expanduser().resolve()),
+        profile_id=profile["id"],
+        baseline_run_id=summary["run_id"],
+    )
     run_record = _read(run / "run.json")
     pair_records = _read(run / "pair-results.json")["records"]
     builds = {label: _read(run / f"build-{label}.json") for label in ("old", "new")}
@@ -268,6 +335,7 @@ def capture(run: Path, output: Path, identifier: str) -> None:
         )
 
     files = {
+        "ci-provenance.json": ci_provenance,
         "compiler-lock.json": compiler_lock,
         "source-lock.json": source_lock,
         "environment.json": environment,
@@ -277,6 +345,9 @@ def capture(run: Path, output: Path, identifier: str) -> None:
     }
     for name, value in files.items():
         _write(output / name, value)
+    (output / "summary.md").write_text(
+        _summary_markdown(compact_summary), encoding="utf-8"
+    )
     (output / "task-results.ndjson").write_text(
         "".join(json.dumps(row, sort_keys=True) + "\n" for row in task_rows),
         encoding="utf-8",
@@ -285,7 +356,9 @@ def capture(run: Path, output: Path, identifier: str) -> None:
         "".join(json.dumps(row, sort_keys=True) + "\n" for row in compact_pairs),
         encoding="utf-8",
     )
-    artifact_names = sorted([*files, "task-results.ndjson", "pair-results.ndjson"])
+    artifact_names = sorted(
+        [*files, "summary.md", "task-results.ndjson", "pair-results.ndjson"]
+    )
     checksums = {
         "schema_version": 1,
         "algorithm": "sha256",
@@ -299,8 +372,19 @@ def main() -> int:
     parser.add_argument("--profile", required=True)
     parser.add_argument("--run", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--ci-provenance",
+        type=Path,
+        required=True,
+        help="JSON record for the successful public CI reproduction",
+    )
     args = parser.parse_args()
-    capture(args.run, args.output, args.profile)
+    capture(
+        args.run,
+        args.output,
+        args.profile,
+        args.ci_provenance,
+    )
     return 0
 
 

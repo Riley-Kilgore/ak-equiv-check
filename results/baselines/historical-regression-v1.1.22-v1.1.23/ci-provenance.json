@@ -1,0 +1,34 @@
+{
+  "artifact": {
+    "api_url": "https://api.github.com/repos/Riley-Kilgore/ak-equiv-check/actions/artifacts/9457392993",
+    "digest": "sha256:8c3bcdd3f555c2722ede7408a15bbaff87dbf08ba4259081f59e9ed8f7e200a8",
+    "expires_at": "2026-11-19T17:34:18Z",
+    "id": 9457392993,
+    "name": "historical-regression-32508847798",
+    "size_in_bytes": 818083
+  },
+  "attestation_kind": "public_ci_reproduction",
+  "baseline_run_id": "f0ca28451b6c98b7c70316813d71dfb94b8f87742ffd5e425be97e3aecae2a6f",
+  "job": {
+    "conclusion": "success",
+    "id": 96855047131,
+    "name": "historical-regression",
+    "url": "https://github.com/Riley-Kilgore/ak-equiv-check/actions/runs/32508847798/job/96855047131"
+  },
+  "observed_profile_result": {
+    "expectation_matched": true,
+    "profile_pass": true,
+    "semantic_status": "confirmed_non_equivalent",
+    "semantic_strict_result": "fail"
+  },
+  "profile_id": "historical-regression-v1.1.22-v1.1.23",
+  "relationship": "independent_reproduction_of_locked_profile",
+  "schema_version": 1,
+  "workflow_run": {
+    "conclusion": "success",
+    "head_sha": "254c86090434d427ad330713d1d201708ec18e97",
+    "id": 32508847798,
+    "name": "equivalence-checker",
+    "url": "https://github.com/Riley-Kilgore/ak-equiv-check/actions/runs/32508847798"
+  }
+}
