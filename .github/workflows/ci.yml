@@ -62,6 +62,11 @@ jobs:
         with:
           use-github-cache: true
           use-mathlib-cache: false
+          lake-package-directory: tool/blaster-backend
+          build: true
+          build-args: CardanoLedgerApi
+          test: false
+          lint: false
       - name: Restore historical compiler cache
         uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
@@ -119,6 +124,11 @@ jobs:
         with:
           use-github-cache: true
           use-mathlib-cache: false
+          lake-package-directory: tool/blaster-backend
+          build: true
+          build-args: CardanoLedgerApi
+          test: false
+          lint: false
       - name: Restore historical compiler cache
         uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
@@ -218,6 +228,11 @@ jobs:
         with:
           use-github-cache: true
           use-mathlib-cache: false
+          lake-package-directory: tool/blaster-backend
+          build: true
+          build-args: CardanoLedgerApi
+          test: false
+          lint: false
       - name: Install and verify pinned Aiken and Z3 binaries
         run: python3 scripts/setup_toolchains.py
       - name: Install Python dependencies
@@ -244,6 +259,11 @@ jobs:
         with:
           use-github-cache: true
           use-mathlib-cache: false
+          lake-package-directory: tool/blaster-backend
+          build: true
+          build-args: CardanoLedgerApi
+          test: false
+          lint: false
       - name: Install and verify pinned Aiken and Z3 binaries
         run: python3 scripts/setup_toolchains.py
       - name: Install Python dependencies
