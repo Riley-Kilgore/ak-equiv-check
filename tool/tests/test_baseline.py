@@ -34,11 +34,23 @@ class BaselineVerificationTests(unittest.TestCase):
         evidence_id = "3" * 64
         _write_ndjson(
             root / "handler-pairs.ndjson",
-            [{"handler_pair_id": "handler", "program_pair_id": pair_id}],
+            [
+                {
+                    "handler_pair_id": "handler",
+                    "program_pair_id": pair_id,
+                    "feature_ids": ["feature"],
+                }
+            ],
         )
         _write_ndjson(
             root / "program-pairs.ndjson",
-            [{"program_pair_id": pair_id}],
+            [
+                {
+                    "program_pair_id": pair_id,
+                    "handler_pair_ids": ["handler"],
+                    "covered_feature_ids": ["feature"],
+                }
+            ],
         )
         _write_ndjson(
             root / "semantic-obligations.ndjson",
@@ -62,6 +74,33 @@ class BaselineVerificationTests(unittest.TestCase):
             root / "evidence-lineage.ndjson",
             [{"evidence_result_id": evidence_id}],
         )
+        _write_ndjson(
+            root / "validator-links.ndjson",
+            [
+                {
+                    "handler_pair_id": "handler",
+                    "program_pair_id": pair_id,
+                    "logical_obligation_ids": [obligation_id],
+                    "evidence_result_ids": [evidence_id],
+                    "feature_ids": ["feature"],
+                }
+            ],
+        )
+        _write_ndjson(
+            root / "feature-links.ndjson",
+            [
+                {
+                    "feature_id": "feature",
+                    "handler_pair_ids": ["handler"],
+                    "program_pair_ids": [pair_id],
+                    "semantic_obligation_ids": [obligation_id],
+                    "required_evidence": [evidence_id],
+                    "authoritative_evidence": [evidence_id],
+                    "all_linked_evidence": [evidence_id],
+                }
+            ],
+        )
+        _write_ndjson(root / "task-results.ndjson", [{"task": "build"}])
         _write_json(root / "compiler-lock.json", {"schema_version": 2})
         _write_json(root / "source-lock.json", {"schema_version": 2})
         _write_json(root / "environment.json", {"schema_version": 2})
@@ -80,6 +119,10 @@ class BaselineVerificationTests(unittest.TestCase):
                     "semantic_obligation_records": 1,
                     "obligation_result_records": 1,
                     "obligation_state_total": 1,
+                    "validator_handlers": 1,
+                    "validator_link_records": 1,
+                    "feature_rows": 1,
+                    "feature_link_records": 1,
                 },
                 "count_invariants": {
                     "obligation_final_states_equal_unique_obligations": True,
@@ -121,6 +164,30 @@ class BaselineVerificationTests(unittest.TestCase):
                 "verification_result": "verified",
             },
         )
+
+    def _rebind(self, root: Path) -> None:
+        previous = json.loads(
+            (root / "checksums.json").read_text(encoding="utf-8")
+        )
+        checksums = {
+            name: hashlib.sha256((root / name).read_bytes()).hexdigest()
+            for name in previous["files"]
+        }
+        content_id = baseline_content_id(checksums)
+        _write_json(
+            root / "checksums.json",
+            {
+                "schema_version": 2,
+                "algorithm": "sha256",
+                "baseline_content_id": content_id,
+                "files": checksums,
+            },
+        )
+        attestation = json.loads(
+            (root / "ci-attestation.json").read_text(encoding="utf-8")
+        )
+        attestation["baseline_content_id"] = content_id
+        _write_json(root / "ci-attestation.json", attestation)
 
     def test_capture_and_verifier_share_content_identity(self) -> None:
         script = ROOT / "scripts" / "capture_historical_baseline.py"
@@ -187,6 +254,58 @@ class BaselineVerificationTests(unittest.TestCase):
                     verify_baseline(root)
 
 
+    def test_tampered_evidence_links_are_rejected_after_rebinding(self) -> None:
+        cases = (
+            (
+                "feature-links.ndjson",
+                "program_pair_ids",
+                ["9" * 64],
+                "invalid program_pair_ids",
+            ),
+            (
+                "feature-links.ndjson",
+                "required_evidence",
+                [],
+                "missing authoritative evidence",
+            ),
+            (
+                "validator-links.ndjson",
+                "evidence_result_ids",
+                [],
+                "wrong parent",
+            ),
+            (
+                "program-pairs.ndjson",
+                "handler_pair_ids",
+                [],
+                "handler links are incomplete",
+            ),
+            (
+                "handler-pairs.ndjson",
+                "feature_ids",
+                [],
+                "feature links are incomplete",
+            ),
+        )
+        for filename, field, value, message in cases:
+            with self.subTest(
+                filename=filename,
+                field=field,
+            ), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                self._baseline(root)
+                records = [
+                    json.loads(line)
+                    for line in (root / filename).read_text().splitlines()
+                    if line
+                ]
+                records[0][field] = value
+                _write_ndjson(root / filename, records)
+                self._rebind(root)
+                with self.assertRaisesRegex(ValueError, message):
+                    verify_baseline(root)
+
+
     def test_tampered_report_counts_are_rejected_after_rebinding(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -196,28 +315,7 @@ class BaselineVerificationTests(unittest.TestCase):
             )
             summary["counts"]["unique_program_pairs"] = 2
             _write_json(root / "summary.json", summary)
-            previous = json.loads(
-                (root / "checksums.json").read_text(encoding="utf-8")
-            )
-            checksums = {
-                name: hashlib.sha256((root / name).read_bytes()).hexdigest()
-                for name in previous["files"]
-            }
-            content_id = baseline_content_id(checksums)
-            _write_json(
-                root / "checksums.json",
-                {
-                    "schema_version": 2,
-                    "algorithm": "sha256",
-                    "baseline_content_id": content_id,
-                    "files": checksums,
-                },
-            )
-            attestation = json.loads(
-                (root / "ci-attestation.json").read_text(encoding="utf-8")
-            )
-            attestation["baseline_content_id"] = content_id
-            _write_json(root / "ci-attestation.json", attestation)
+            self._rebind(root)
             with self.assertRaisesRegex(ValueError, "count mismatch"):
                 verify_baseline(root)
 

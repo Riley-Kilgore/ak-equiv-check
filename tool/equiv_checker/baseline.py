@@ -15,6 +15,9 @@ REQUIRED_BASELINE_FILES = frozenset(
         "semantic-obligations.ndjson",
         "obligation-results.ndjson",
         "evidence-lineage.ndjson",
+        "validator-links.ndjson",
+        "feature-links.ndjson",
+        "task-results.ndjson",
         "compiler-lock.json",
         "source-lock.json",
         "environment.json",
@@ -69,6 +72,23 @@ def baseline_content_id(checksums: dict[str, str]) -> str:
     )
 
 
+def _linked_id_set(
+    row: dict[str, Any],
+    field: str,
+    allowed: set[str],
+    record_kind: str,
+) -> set[str]:
+    values = row.get(field)
+    if (
+        not isinstance(values, list)
+        or any(not isinstance(value, str) for value in values)
+        or len(values) != len(set(values))
+        or not set(values).issubset(allowed)
+    ):
+        raise ValueError(f"{record_kind} has invalid {field}")
+    return set(values)
+
+
 def verify_baseline(path: Path) -> dict[str, Any]:
     root = path.expanduser().resolve()
     missing = sorted(name for name in REQUIRED_BASELINE_FILES if not (root / name).is_file())
@@ -112,6 +132,9 @@ def verify_baseline(path: Path) -> dict[str, Any]:
     obligations = _read_ndjson(root / "semantic-obligations.ndjson")
     results = _read_ndjson(root / "obligation-results.ndjson")
     lineage = _read_ndjson(root / "evidence-lineage.ndjson")
+    validator_links = _read_ndjson(root / "validator-links.ndjson")
+    feature_links = _read_ndjson(root / "feature-links.ndjson")
+    task_results = _read_ndjson(root / "task-results.ndjson")
     pair_ids = {
         row.get("program_pair_id")
         for row in program_pairs
@@ -140,16 +163,175 @@ def verify_baseline(path: Path) -> dict[str, Any]:
         if row.get("program_pair_id") not in pair_ids:
             raise ValueError("semantic obligation has no program-pair parent")
     evidence_ids: set[str] = set()
+    result_obligation_ids: set[str] = set()
+    evidence_by_obligation: dict[str, str] = {}
     for row in results:
-        if row.get("logical_obligation_id") not in obligation_ids:
-            raise ValueError("obligation result has no logical-obligation parent")
+        obligation_id = row.get("logical_obligation_id")
+        if (
+            obligation_id not in obligation_ids
+            or obligation_id in result_obligation_ids
+        ):
+            raise ValueError(
+                "duplicate or orphaned obligation result"
+            )
+        result_obligation_ids.add(obligation_id)
         evidence_id = row.get("evidence_result_id")
         if not isinstance(evidence_id, str) or evidence_id in evidence_ids:
             raise ValueError("duplicate or missing evidence-result identity")
         evidence_ids.add(evidence_id)
+        evidence_by_obligation[obligation_id] = evidence_id
+    if result_obligation_ids != obligation_ids:
+        raise ValueError("obligation results are incomplete")
+    lineage_evidence_ids: set[str] = set()
     for row in lineage:
-        if row.get("evidence_result_id") not in evidence_ids:
-            raise ValueError("evidence lineage has no result parent")
+        evidence_id = row.get("evidence_result_id")
+        if evidence_id not in evidence_ids or evidence_id in lineage_evidence_ids:
+            raise ValueError("duplicate or orphaned evidence lineage")
+        lineage_evidence_ids.add(evidence_id)
+    if lineage_evidence_ids != evidence_ids:
+        raise ValueError("evidence lineage is incomplete")
+    handlers_by_id = {
+        row["handler_pair_id"]: row for row in handler_pairs
+    }
+    programs_by_id = {
+        row["program_pair_id"]: row for row in program_pairs
+    }
+    for row in program_pairs:
+        linked_handlers = _linked_id_set(
+            row, "handler_pair_ids", handler_ids, "program pair"
+        )
+        actual_handlers = {
+            handler_id
+            for handler_id, handler in handlers_by_id.items()
+            if handler.get("program_pair_id") == row["program_pair_id"]
+        }
+        if linked_handlers != actual_handlers:
+            raise ValueError("program-pair handler links are incomplete")
+
+    validator_handler_ids: set[str] = set()
+    validator_links_by_handler: dict[str, dict[str, Any]] = {}
+    obligation_parent = {
+        row["logical_obligation_id"]: row["program_pair_id"]
+        for row in obligations
+    }
+    for row in validator_links:
+        handler_id = row.get("handler_pair_id")
+        if (
+            handler_id not in handler_ids
+            or handler_id in validator_handler_ids
+        ):
+            raise ValueError("duplicate or missing validator handler link")
+        validator_handler_ids.add(handler_id)
+        validator_links_by_handler[handler_id] = row
+        handler = handlers_by_id[handler_id]
+        program_pair_id = row.get("program_pair_id")
+        if program_pair_id != handler.get("program_pair_id"):
+            raise ValueError("validator link has the wrong program pair")
+        linked_obligations = _linked_id_set(
+            row,
+            "logical_obligation_ids",
+            obligation_ids,
+            "validator link",
+        )
+        linked_evidence = _linked_id_set(
+            row, "evidence_result_ids", evidence_ids, "validator link"
+        )
+        if (
+            any(
+                obligation_parent[obligation_id] != program_pair_id
+                for obligation_id in linked_obligations
+            )
+            or linked_evidence
+            != {
+                evidence_by_obligation[obligation_id]
+                for obligation_id in linked_obligations
+            }
+        ):
+            raise ValueError("validator link evidence has the wrong parent")
+    if validator_handler_ids != handler_ids:
+        raise ValueError("validator handler links are incomplete")
+
+    feature_ids: set[str] = set()
+    expected_handler_features = {
+        handler_id: set() for handler_id in handler_ids
+    }
+    expected_program_features = {
+        program_id: set() for program_id in pair_ids
+    }
+    for row in feature_links:
+        feature_id = row.get("feature_id")
+        if not isinstance(feature_id, str) or feature_id in feature_ids:
+            raise ValueError("duplicate or missing feature identity")
+        feature_ids.add(feature_id)
+        linked_handlers = _linked_id_set(
+            row, "handler_pair_ids", handler_ids, "feature link"
+        )
+        linked_programs = _linked_id_set(
+            row, "program_pair_ids", pair_ids, "feature link"
+        )
+        linked_obligations = _linked_id_set(
+            row,
+            "semantic_obligation_ids",
+            obligation_ids,
+            "feature link",
+        )
+        required_evidence = _linked_id_set(
+            row, "required_evidence", evidence_ids, "feature link"
+        )
+        authoritative_evidence = _linked_id_set(
+            row, "authoritative_evidence", evidence_ids, "feature link"
+        )
+        all_evidence = _linked_id_set(
+            row, "all_linked_evidence", evidence_ids, "feature link"
+        )
+        linked_evidence_for_obligations = {
+            evidence_by_obligation[obligation_id]
+            for obligation_id in linked_obligations
+        }
+        if (
+            not linked_handlers
+            or not linked_programs
+            or not linked_obligations
+            or not required_evidence
+            or not required_evidence.issubset(authoritative_evidence)
+            or not authoritative_evidence.issubset(all_evidence)
+            or all_evidence != linked_evidence_for_obligations
+        ):
+            raise ValueError("feature link is missing authoritative evidence")
+        if any(
+            handlers_by_id[handler_id].get("program_pair_id")
+            not in linked_programs
+            for handler_id in linked_handlers
+        ):
+            raise ValueError("feature handler does not use a linked program")
+        if any(
+            obligation_parent[obligation_id] not in linked_programs
+            for obligation_id in linked_obligations
+        ):
+            raise ValueError("feature obligation has the wrong program parent")
+        for handler_id in linked_handlers:
+            expected_handler_features[handler_id].add(feature_id)
+        for program_id in linked_programs:
+            expected_program_features[program_id].add(feature_id)
+
+    for handler_id, expected_features in expected_handler_features.items():
+        if (
+            set(handlers_by_id[handler_id].get("feature_ids", []))
+            != expected_features
+            or set(
+                validator_links_by_handler[handler_id].get("feature_ids", [])
+            )
+            != expected_features
+        ):
+            raise ValueError("validator feature links are incomplete")
+    for program_id, expected_features in expected_program_features.items():
+        if (
+            set(programs_by_id[program_id].get("covered_feature_ids", []))
+            != expected_features
+        ):
+            raise ValueError("program feature links are incomplete")
+    if not task_results:
+        raise ValueError("baseline task results are empty")
 
     counts = summary.get("counts")
     if not isinstance(counts, dict):
@@ -163,6 +345,10 @@ def verify_baseline(path: Path) -> dict[str, Any]:
         "semantic_obligation_records": len(obligations),
         "obligation_result_records": len(results),
         "obligation_state_total": len(obligations),
+        "validator_handlers": len(validator_links),
+        "validator_link_records": len(validator_links),
+        "feature_rows": len(feature_links),
+        "feature_link_records": len(feature_links),
     }
     for name, expected in expected_counts.items():
         if counts.get(name) != expected:

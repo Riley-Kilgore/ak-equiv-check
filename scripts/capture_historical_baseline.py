@@ -73,6 +73,8 @@ def _records(run: Path, filename: str) -> list[dict[str, Any]]:
 
 
 def _portable(value: Any) -> Any:
+    if isinstance(value, str):
+        return value.replace(str(ROOT), "$ROOT")
     if isinstance(value, list):
         return [_portable(item) for item in value]
     if not isinstance(value, dict):
@@ -117,6 +119,155 @@ def _write_ndjson(path: Path, records: list[dict[str, Any]]) -> None:
         ),
         encoding="utf-8",
     )
+
+
+def _bind_historical_feature_links(
+    profile: dict[str, Any],
+    record_files: dict[str, list[dict[str, Any]]],
+    pair_results: list[dict[str, Any]],
+) -> None:
+    trigger_path = ROOT / profile["fixture"] / "codegen-triggers.json"
+    if not trigger_path.is_file():
+        return
+    trigger_document = _read(trigger_path)
+    triggers = trigger_document.get("records")
+    if not isinstance(triggers, list) or not all(
+        isinstance(row, dict) for row in triggers
+    ):
+        raise ValueError(f"invalid historical feature records: {trigger_path}")
+
+    program_pairs = record_files["program-pairs.ndjson"]
+    programs_by_hashes: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for pair in program_pairs:
+        key = (
+            pair["old_program_artifact"]["script_sha256"],
+            pair["new_program_artifact"]["script_sha256"],
+        )
+        programs_by_hashes.setdefault(key, []).append(pair)
+    obligations = record_files["semantic-obligations.ndjson"]
+    evidence_by_obligation = {
+        row["logical_obligation_id"]: row["evidence_result_id"]
+        for row in record_files["obligation-results.ndjson"]
+    }
+    status_by_pair = {
+        row["program_pair_id"]: row["status"] for row in pair_results
+    }
+    feature_status = {
+        "equivalent_under_raw_model": "pair_complete_equivalent",
+        "equivalent_under_ledger_model": "pair_complete_equivalent",
+        "confirmed_non_equivalent": "pair_confirmed_non_equivalent",
+        "bounded_equivalent": "pair_bounded_equivalent",
+        "blaster_inconclusive": "pair_inconclusive",
+        "blaster_unsupported": "pair_unsupported",
+    }
+    handlers = record_files["handler-pairs.ndjson"]
+    validator_links = record_files["validator-links.ndjson"]
+    feature_links: list[dict[str, Any]] = []
+    seen_features: set[str] = set()
+    for trigger in triggers:
+        feature_id = trigger.get("feature_id")
+        if not isinstance(feature_id, str) or feature_id in seen_features:
+            raise ValueError("historical feature IDs must be unique strings")
+        seen_features.add(feature_id)
+        key = (
+            trigger.get("old_compiled_code_sha256"),
+            trigger.get("new_compiled_code_sha256"),
+        )
+        matches = programs_by_hashes.get(key, [])
+        if len(matches) != 1:
+            raise ValueError(
+                f"historical feature {feature_id} does not identify one program pair"
+            )
+        program_pair = matches[0]
+        program_pair_id = program_pair["program_pair_id"]
+        handler_pair_ids = sorted(program_pair["handler_pair_ids"])
+        obligation_rows = [
+            obligation
+            for obligation in obligations
+            if obligation["program_pair_id"] == program_pair_id
+        ]
+        obligation_ids = sorted(
+            obligation["logical_obligation_id"]
+            for obligation in obligation_rows
+        )
+        authoritative_obligation_ids = sorted(
+            obligation["logical_obligation_id"]
+            for obligation in obligation_rows
+            if obligation.get("input_model", {}).get("profile")
+            == "raw-uplc/v1"
+        )
+        evidence_ids = sorted(
+            evidence_by_obligation[obligation_id]
+            for obligation_id in obligation_ids
+        )
+        authoritative_evidence_ids = sorted(
+            evidence_by_obligation[obligation_id]
+            for obligation_id in authoritative_obligation_ids
+        )
+        pair_status = status_by_pair.get(program_pair_id)
+        if pair_status not in feature_status:
+            raise ValueError(
+                f"historical feature {feature_id} has unsupported pair status "
+                f"{pair_status!r}"
+            )
+        feature_links.append(
+            {
+                "feature_id": feature_id,
+                "row_kind": "historical_codegen_trigger",
+                "status": feature_status[pair_status],
+                "source_location": trigger.get("source_location"),
+                "language_construct": trigger.get("language_construct"),
+                "expected_compiler_change": trigger.get(
+                    "expected_compiler_change"
+                ),
+                "old_script_sha256": key[0],
+                "new_script_sha256": key[1],
+                "handler_pair_ids": handler_pair_ids,
+                "program_pair_ids": [program_pair_id],
+                "semantic_obligation_ids": obligation_ids,
+                "required_evidence": authoritative_evidence_ids,
+                "authoritative_evidence": authoritative_evidence_ids,
+                "all_linked_evidence": evidence_ids,
+            }
+        )
+        program_pair["covered_feature_ids"] = sorted(
+            set(program_pair.get("covered_feature_ids", [])) | {feature_id}
+        )
+        for row in handlers:
+            if row["handler_pair_id"] in handler_pair_ids:
+                row["feature_ids"] = sorted(
+                    set(row.get("feature_ids", [])) | {feature_id}
+                )
+        for row in validator_links:
+            if row["handler_pair_id"] in handler_pair_ids:
+                row["feature_ids"] = sorted(
+                    set(row.get("feature_ids", [])) | {feature_id}
+                )
+    record_files["feature-links.ndjson"] = feature_links
+
+
+def _bind_replay_evidence(
+    obligation_results: list[dict[str, Any]],
+    pair_results: list[dict[str, Any]],
+) -> None:
+    results_by_obligation = {
+        row["logical_obligation_id"]: row for row in obligation_results
+    }
+    for pair in pair_results:
+        replay = pair.get("counterexample_replay")
+        witness = pair.get("witness")
+        if not isinstance(replay, dict) or not replay.get("confirmed"):
+            continue
+        obligation_id = replay.get("logical_obligation_id")
+        result = results_by_obligation.get(obligation_id)
+        if result is None:
+            raise ValueError(
+                "confirmed replay has no matching obligation result"
+            )
+        if not isinstance(witness, dict):
+            raise ValueError("confirmed replay has no machine witness record")
+        result["witness"] = witness
+        result["replay"] = replay
 
 
 def _summary_markdown(summary: dict[str, Any]) -> str:
@@ -222,6 +373,7 @@ def capture(
                 )
             child.unlink()
     output.mkdir(parents=True, exist_ok=True)
+    pair_results = _records(run, "pair-results.json")
     record_files = {
         "handler-pairs.ndjson": _records(run, "handler-pairs.json"),
         "program-pairs.ndjson": _records(run, "program-pairs.json"),
@@ -232,6 +384,10 @@ def capture(
         "validator-links.ndjson": _records(run, "validator-links.json"),
         "feature-links.ndjson": _records(run, "feature-links.json"),
     }
+    _bind_replay_evidence(
+        record_files["obligation-results.ndjson"], pair_results
+    )
+    _bind_historical_feature_links(profile, record_files, pair_results)
     obligation_results = record_files["obligation-results.ndjson"]
     record_files["evidence-lineage.ndjson"] = [
         {
@@ -278,7 +434,6 @@ def capture(
         ]
         == builds["new"]["dependency_lock_hash_before"],
     }
-    pair_results = _records(run, "pair-results.json")
     environment = {
         "schema_version": 2,
         "blaster_configuration": run_record["blaster_configuration"],
@@ -298,6 +453,10 @@ def capture(
                 record_files["semantic-obligations.ndjson"]
             ),
             "obligation_result_records": len(obligation_results),
+            "validator_link_records": len(record_files["validator-links.ndjson"]),
+            "feature_link_records": len(record_files["feature-links.ndjson"]),
+            "validator_handlers": len(record_files["validator-links.ndjson"]),
+            "feature_rows": len(record_files["feature-links.ndjson"]),
         }
     )
     compact_summary = {
