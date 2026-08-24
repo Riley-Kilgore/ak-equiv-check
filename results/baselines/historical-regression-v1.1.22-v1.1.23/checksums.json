@@ -1,16 +1,20 @@
 {
   "algorithm": "sha256",
+  "baseline_content_id": "568c88b978c9b4e4a9ca7f4b634cced2285b2739d9af2678cfbbfcd630046b9c",
   "files": {
-    "ci-provenance.json": "53bd70f9a60c633898c5a6b7ffaee4bdb55c036f0009b5087b6a55badf7df1aa",
-    "compiler-lock.json": "f4bce1f6706ac24353c3c3f205e2f5f7deddf5e2e9a5adb686e6feb74d3310e3",
-    "environment.json": "39588221a6e5729e73c9461bd75203fc8038563fa2ebbba334ba64e98fd7182c",
-    "feature-coverage.json": "21e076556a27d648ec5400a09004d757e1fc76062ff0178c1879fa94033e1f03",
-    "pair-results.ndjson": "677da0ba8c2118c04d55d01c8a1acbd1c6fae978d3944d49df81878a4d840d7a",
-    "source-lock.json": "770f7bb2d6b57baf56643776775fb621096dda229221bcde2a9f092fbe882ac8",
-    "source-provenance.json": "f4ccde512a2e4766e0035e585e45033134c1ded8980e4a51e3727678af817bfb",
-    "summary.json": "dec2ec0593ed722d0d104e3851b8b9e82f3475beadb425fe4cd9ef443598a294",
-    "summary.md": "466ae2499ed057854ebf6655e10a575e1ab07e26f1d7ebcf53ace6017d521c9f",
-    "task-results.ndjson": "6b4198134bbd219baedf0291728bff7f81943f84e64ab932547b1014a88ffeee"
+    "compiler-lock.json": "36330940bfe52a1573c9de85c7538bd94343f2d647115613e060d01282639b92",
+    "environment.json": "d0285af4f6cbb4190d6eb9fe701df3b2630b230bd05977c4f2d4ad057cf9ecb4",
+    "evidence-lineage.ndjson": "3305810674157d2edf919db735fd12dcc6c7827e56066593a8d300102c88e2fb",
+    "feature-links.ndjson": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "handler-pairs.ndjson": "513908661f531146d3806177e5f7e3b0eeae592ae7bcba52a5588fb9e1ef0d3d",
+    "obligation-results.ndjson": "b00b105ac6be51bfe02a1b950d027a661b17ecc09af1f0a194067c005a70933f",
+    "program-pairs.ndjson": "342c23e9c2e9ff61363ce01f22b3a1fd94b1203840059f6aaf04c3ba500d9dbe",
+    "semantic-obligations.ndjson": "64b192333d984723ac8d5de7c774250ce22537c7026593dd05bc6e03e9083715",
+    "source-lock.json": "ef388b04baee79bcf298ee1aea016a1211b7918996e2b90c60ac7ccf6655b7f6",
+    "summary.json": "4d22a9a59e268a7b75c3ce5d2c64deb725288de824e4af37074fa5161ff70524",
+    "summary.md": "40dd47dd21aad4655d5210b26de0061ea1ff6216e0de3a61b4ff2b87b176c755",
+    "task-results.ndjson": "2bb11571ee35df0c7cc70fc0efe1a46f16b52ed2d96821f735d3ff946efb8e12",
+    "validator-links.ndjson": "db9b68013994cd623d25d15cd8c76c57c8fa3c5e8010952f3989715f2cdede91"
   },
-  "schema_version": 1
+  "schema_version": 2
 }

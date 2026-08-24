@@ -4,7 +4,31 @@
   "old_new_dependency_lock_equal": true,
   "old_new_source_hash_equal": true,
   "package": "ak-equiv/historical-codegen-equivalent",
-  "schema_version": 1,
+  "schema_version": 2,
   "source_hash": "91be68619b8a34d8461620b60082b3e6f1fb81c61a1bbff62c871782bc31cacc",
-  "source_immutable": true
+  "source_immutable": true,
+  "source_provenance": {
+    "commit": "18a57afa5dedf5e1c7b24c749311cb7eafe0e0a6",
+    "dirty": false,
+    "identity": "9c607f1bfed8fd3f7702c9b53eff2906dc031d12f8395807f74493bf4aa271ea",
+    "identity_fields": {
+      "adapter_hash": null,
+      "canonical_repository_url": "https://github.com/Riley-Kilgore/ak-equiv-check",
+      "dependency_lock_hash": "88ea28f7520d83d207bae89c30e2f6a2d27b337e36eb19b59a5ef01edefb820b",
+      "package_subpath": "fixtures/historical-codegen-equivalent",
+      "revision": "18a57afa5dedf5e1c7b24c749311cb7eafe0e0a6",
+      "source_hash": "91be68619b8a34d8461620b60082b3e6f1fb81c61a1bbff62c871782bc31cacc"
+    },
+    "kind": "git",
+    "logical_identity": "16ada32bbcffafb2059d711e54b8fd1ca93bb7ae9ea691f4c6080b2cee2e712e",
+    "logical_identity_fields": {
+      "adapter_hash": null,
+      "canonical_repository_url": "https://github.com/Riley-Kilgore/ak-equiv-check",
+      "dependency_lock_hash": "88ea28f7520d83d207bae89c30e2f6a2d27b337e36eb19b59a5ef01edefb820b",
+      "package_subpath": "fixtures/historical-codegen-equivalent",
+      "source_hash": "91be68619b8a34d8461620b60082b3e6f1fb81c61a1bbff62c871782bc31cacc"
+    },
+    "package_path": "fixtures/historical-codegen-equivalent",
+    "remote": "https://github.com/Riley-Kilgore/ak-equiv-check"
+  }
 }

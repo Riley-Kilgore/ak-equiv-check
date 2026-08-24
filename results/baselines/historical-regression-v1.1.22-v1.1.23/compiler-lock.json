@@ -1,13 +1,13 @@
 {
   "compilers": {
     "new": {
-      "artifact_id": "125aae877b0a5c9638315191e9fdde8019a984983e43c73de795f0594c1914a1",
+      "artifact_id": "89fae4f7a74934ebb7aa2719fff14fa594185987fa347b24cece6e0c449212f0",
       "artifact_kind": "release",
       "binary": {
         "path": "bin/aiken",
         "reported_version": "aiken v1.1.23+8949565",
-        "sha256": "6685b016a98cb7a494ed1a4b2a4ad804bae7e54605a6a17c9cd50da3c9e05d31",
-        "size": 26321536
+        "sha256": "f396530004c83837ba847a85f0870c27de0429b0f6a511d296732a44630118e9",
+        "size": 31939320
       },
       "build": {
         "cargo_target_directory": "cargo-target/v1.1.23",
@@ -17,17 +17,17 @@
           "--release",
           "--locked"
         ],
-        "duration_seconds": 111.200471,
+        "duration_seconds": 229.450617,
         "exit_code": 0,
         "logs": {
           "stderr": "logs/cargo-build.stderr.log",
-          "stderr_sha256": "cd9c181ea0196cac0f37ca3a822ede01de414b89e1e54bf68992d482dab3f8f3",
+          "stderr_sha256": "021996b80adfa2e5f0d2d5b08fd14baea16da9e66f66c187454f759c2bc4215a",
           "stdout": "logs/cargo-build.stdout.log",
           "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
         },
-        "timestamp_utc": "2026-08-21T15:23:08.552990+00:00"
+        "timestamp_utc": "2026-08-21T17:42:46.348396+00:00"
       },
-      "cache_key": "0128eed4818ef397f6e63bef351e26709c7b17620429bf5aed83a68c84ad6099",
+      "cache_key": "b1920bfa6b02bf6beb40f48044c78b4ec81ecf4645432978b7d340f078b1741a",
       "label": "v1.1.23",
       "reproducibility": {
         "bundle": null,
@@ -39,7 +39,7 @@
         "commit_sha": "8949565a9969278846ffefe30bc3b892029dd318",
         "dirty": false,
         "ref": "v1.1.23",
-        "repository_url": "https://github.com/aiken-lang/aiken.git",
+        "repository_url": "https://github.com/aiken-lang/aiken",
         "required_rust_version": "1.94.1",
         "source_tree_git_sha": "35f8350b88fa909fa0d1e9a807d2ffae8e1bc627",
         "source_tree_sha256": "985516c89f7b7bde3c29dc18b96b7e68e7bdbd0ca3a102bb37d0804a00afe06c",
@@ -47,25 +47,25 @@
         "tag_target_type": "annotated_tag"
       },
       "target": {
-        "architecture": "arm64",
-        "platform": "darwin",
-        "target_triple": "aarch64-apple-darwin"
+        "architecture": "x86_64",
+        "platform": "linux",
+        "target_triple": "x86_64-unknown-linux-gnu"
       },
       "toolchain": {
         "cargo_version": "cargo 1.97.1 (c980f4866 2026-06-30)",
-        "rustc_verbose": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: aarch64-apple-darwin\nrelease: 1.97.1\nLLVM version: 22.1.6",
-        "rustup_active_toolchain": "stable-aarch64-apple-darwin (default)",
-        "target_triple": "aarch64-apple-darwin"
+        "rustc_verbose": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6",
+        "rustup_active_toolchain": "stable-x86_64-unknown-linux-gnu (default)",
+        "target_triple": "x86_64-unknown-linux-gnu"
       }
     },
     "old": {
-      "artifact_id": "dc597cfa43c45901f54ec8d4c01656ecacc4b03ba977a3a89da11c500d555ba5",
+      "artifact_id": "785be1597c2a6931b199dd2d9592bc2ddd7fc7539d0394a2934d968f314f167c",
       "artifact_kind": "release",
       "binary": {
         "path": "bin/aiken",
         "reported_version": "aiken v1.1.22+39d6b04",
-        "sha256": "cfcc622d8fce8278bbd26d0ad62a5d2753da1566a0c7b50bf5e35d421d823b84",
-        "size": 26392480
+        "sha256": "7cc34d21d578aed51e1dd0c5d13d8ff55b6ce2e70099e30d7393b194ed5d36e5",
+        "size": 32420304
       },
       "build": {
         "cargo_target_directory": "cargo-target/v1.1.22",
@@ -75,17 +75,17 @@
           "--release",
           "--locked"
         ],
-        "duration_seconds": 114.02492,
+        "duration_seconds": 242.1636,
         "exit_code": 0,
         "logs": {
           "stderr": "logs/cargo-build.stderr.log",
-          "stderr_sha256": "e3d8e8957af3f0aa5e101ba3f1b1552d4cb5c2f437c75c9d3de24699d1707184",
+          "stderr_sha256": "8582e00ee450647a0b3608956a9adb90c3202a6438a25b5d3b56265337881345",
           "stdout": "logs/cargo-build.stdout.log",
           "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
         },
-        "timestamp_utc": "2026-08-21T15:23:06.836513+00:00"
+        "timestamp_utc": "2026-08-21T17:38:54.091569+00:00"
       },
-      "cache_key": "ea488b9d3c2009a26ded49523414d7fec80cf571e36af848385bf4a0c1c082d6",
+      "cache_key": "e8d974f37ba8225f7deb271f12a3c7f9a0cbae30db749fdfdc2e690fdc125e29",
       "label": "v1.1.22",
       "reproducibility": {
         "bundle": null,
@@ -97,7 +97,7 @@
         "commit_sha": "39d6b049da08816aa51c9f8d3d73b9d292922f45",
         "dirty": false,
         "ref": "v1.1.22",
-        "repository_url": "https://github.com/aiken-lang/aiken.git",
+        "repository_url": "https://github.com/aiken-lang/aiken",
         "required_rust_version": "1.94.1",
         "source_tree_git_sha": "6ff34ad3512485cc4a46ddb078c709a60d4cb8b9",
         "source_tree_sha256": "32e811fcb9b44c8237acc82d33f3e7988873303065de534b2251989c440017fc",
@@ -105,22 +105,22 @@
         "tag_target_type": "annotated_tag"
       },
       "target": {
-        "architecture": "arm64",
-        "platform": "darwin",
-        "target_triple": "aarch64-apple-darwin"
+        "architecture": "x86_64",
+        "platform": "linux",
+        "target_triple": "x86_64-unknown-linux-gnu"
       },
       "toolchain": {
         "cargo_version": "cargo 1.97.1 (c980f4866 2026-06-30)",
-        "rustc_verbose": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: aarch64-apple-darwin\nrelease: 1.97.1\nLLVM version: 22.1.6",
-        "rustup_active_toolchain": "stable-aarch64-apple-darwin (default)",
-        "target_triple": "aarch64-apple-darwin"
+        "rustc_verbose": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6",
+        "rustup_active_toolchain": "stable-x86_64-unknown-linux-gnu (default)",
+        "target_triple": "x86_64-unknown-linux-gnu"
       }
     }
   },
   "profile_lock": {
     "profile_definition_sha256": "e3fbfd7b8367317c3e64d8f710d7a303512346f171b800f73772060a0debcb91",
     "profile_id": "historical-regression-v1.1.22-v1.1.23",
-    "profile_registry_sha256": "6bde8b03cc44654a3864e43051f4cb1a3917ecff24c8a7c14d44d0c614e733b3",
+    "profile_registry_sha256": "46db25f125d60599b8874697d1e3fa3846d7c7a3e4ffe6bfb28b2db607be20f1",
     "releases": {
       "v1.1.22": {
         "commit_sha": "39d6b049da08816aa51c9f8d3d73b9d292922f45",
@@ -140,5 +140,5 @@
       }
     }
   },
-  "schema_version": 1
+  "schema_version": 2
 }

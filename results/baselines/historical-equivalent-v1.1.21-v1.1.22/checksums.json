@@ -1,16 +1,20 @@
 {
   "algorithm": "sha256",
+  "baseline_content_id": "8392492fe07fe95bf7f68aa7821d025cfffc6463d1e07b2cc27a6e1b3a1ecb51",
   "files": {
-    "ci-provenance.json": "7dd56ed2cb753c3a3ba3118073c554500f046f35573c8ea5698625befa1f63e9",
-    "compiler-lock.json": "478d03ad4815cf1a19d8f63cf8ec8a5a9e7acd49c4e32fa16b29390ed1249269",
-    "environment.json": "39588221a6e5729e73c9461bd75203fc8038563fa2ebbba334ba64e98fd7182c",
-    "feature-coverage.json": "0d93e2d723d7042798fe02274373ecbbd019a0c1960ef413f06fe2c0d2389d61",
-    "pair-results.ndjson": "efb3bde4c109390726902c4b76063649411ca028c841073bd425a74c8cb01a79",
-    "source-lock.json": "21884290185d0434757ba1e8931aa38f4433c3944501dd387e19d5190344d326",
-    "source-provenance.json": "e069743e818588666f610d911fe8f42117fb16a1608ade13218d92dcdadca465",
-    "summary.json": "32f28638494d73eb11e9ba9210df9ef65d2561417a4726ff4bc19e6da0f367f4",
-    "summary.md": "50d4d0869cef4f8a36330814d61b21839a14d152cb5872713304883aac9d9349",
-    "task-results.ndjson": "c3c26fcb2035983d771c4934ba2af0a89a9186127d2ce0bfb353fbc3ccb9a42e"
+    "compiler-lock.json": "d61b4658d79586399b5fb7dac37810982a577f769cb4823ba592c9907d657b16",
+    "environment.json": "3b5223e3719a734972a28a9607717a8cf6dda3e30255e419c6cdbc312886d70c",
+    "evidence-lineage.ndjson": "6a36148d7d71c24c2a387fb0e2fdc1297c03a47b27b604d13fce405d570d8266",
+    "feature-links.ndjson": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "handler-pairs.ndjson": "302f3f34376dca4068912c1f2eb8714e1f72f8e91e9bcdbcfd32a8a0a122eb4f",
+    "obligation-results.ndjson": "42cd1596be3ab38d2f3b58d73a8d3194aa22b1157afe505c4fe85ec5e71d61a6",
+    "program-pairs.ndjson": "5a817e0cfd73aba8099097b356a254cb4b5101cc19de3670e6dfe88002740102",
+    "semantic-obligations.ndjson": "c9ff092a2d9b0e31f3f213ffab1717d9b55c02fd66cbeef8d3735786ab81313d",
+    "source-lock.json": "2bf5780e9ce2ad94da5350d3002e761ee3b56126d45b3547e24d0a4bafa9909d",
+    "summary.json": "fb0dee1d6cb628ef060e69ec00a00b7336eb46a1c5da4c9d0fe50238de99e151",
+    "summary.md": "823f2f4780b5e3f85942d2fc3406bb6a5cb1a34099d23be14e1d2fad754c2f32",
+    "task-results.ndjson": "7a86683ee87dbb6ff47ba6aac4430481e2406fef508ed8d97914bc0e24ce40e2",
+    "validator-links.ndjson": "6dc06c2514226ce494cc33fd11ba55601a77e5c8a184f26a63a58f60c5a92796"
   },
-  "schema_version": 1
+  "schema_version": 2
 }

@@ -1,14 +1,48 @@
 {
+  "count_invariants": {
+    "obligation_final_states_equal_unique_obligations": true,
+    "program_final_states_equal_unique_program_pairs": true
+  },
   "counts": {
-    "bounded_results": 0,
-    "byte_identical_pairs": 0,
-    "confirmed_non_equivalent_results": 2,
-    "inconclusive_results": 0,
-    "non_identical_pairs": 2,
-    "strict_complete_equivalence_results": 0,
-    "total_generated_validator_pairs": 2
+    "abi_failures": 0,
+    "bounded_equivalent_obligations": 0,
+    "build_failures": 0,
+    "compatibility_differences": 0,
+    "confirmed_non_equivalent_obligations": 1,
+    "deduplicated_invocations": 1,
+    "deduplicated_obligations": 4,
+    "equivalent_under_ledger_model_obligations": 0,
+    "equivalent_under_raw_model_obligations": 3,
+    "feature_rows": 0,
+    "handler_pair_records": 2,
+    "handler_pairs": 2,
+    "identical_program_pairs": 0,
+    "inconclusive_obligations": 0,
+    "obligation_result_records": 12,
+    "obligation_state_total": 12,
+    "off_ledger_differences": 0,
+    "program_pair_records": 1,
+    "program_state_total": 1,
+    "reused_obligations": 0,
+    "semantic_obligation_records": 12,
+    "shared_features_covered": 0,
+    "shared_features_missing": 0,
+    "unique_changed_program_pairs": 1,
+    "unique_ledger_obligations": 8,
+    "unique_program_pairs": 1,
+    "unique_raw_obligations": 4,
+    "unreplayed_falsifications": 0,
+    "unsupported_obligations": 4,
+    "validator_records_new": 2,
+    "validator_records_old": 2
   },
   "gaps": [],
+  "obligation_status_counts": {
+    "falsified": 1,
+    "ledger_model_unsupported": 4,
+    "pending": 4,
+    "proven": 3
+  },
   "profile": {
     "expectation_matched": true,
     "expected_strict_result": "fail",
@@ -18,16 +52,39 @@
     "profile_pass": true,
     "semantic_status": "confirmed_non_equivalent",
     "semantic_statuses": [
-      "confirmed_non_equivalent",
       "confirmed_non_equivalent"
     ],
     "semantic_strict_result": "fail"
   },
-  "run_id": "f0ca28451b6c98b7c70316813d71dfb94b8f87742ffd5e425be97e3aecae2a6f",
-  "schema_version": 1,
+  "run_id": "af10e162813cb39eac713ad86c9f32774015525ac1fba8b48f3af3edf163ffb8",
+  "schema_version": 2,
   "script_difference_observed": true,
+  "source_provenance": {
+    "commit": "18a57afa5dedf5e1c7b24c749311cb7eafe0e0a6",
+    "dirty": false,
+    "identity": "53b528a5da0150002cb6ad880e5c037d437004474d05b97bd236283923ca389a",
+    "identity_fields": {
+      "adapter_hash": null,
+      "canonical_repository_url": "https://github.com/Riley-Kilgore/ak-equiv-check",
+      "dependency_lock_hash": "88ea28f7520d83d207bae89c30e2f6a2d27b337e36eb19b59a5ef01edefb820b",
+      "package_subpath": "fixtures/historical-codegen-regression",
+      "revision": "18a57afa5dedf5e1c7b24c749311cb7eafe0e0a6",
+      "source_hash": "a129e73533b2d496e082bec20d555d95eb868decd3b356f7a9424a8187733091"
+    },
+    "kind": "git",
+    "logical_identity": "8c58d79faaa026f579f2e9df2eaaffca5fe7d7701052b1d62dd4d21ee3de3fba",
+    "logical_identity_fields": {
+      "adapter_hash": null,
+      "canonical_repository_url": "https://github.com/Riley-Kilgore/ak-equiv-check",
+      "dependency_lock_hash": "88ea28f7520d83d207bae89c30e2f6a2d27b337e36eb19b59a5ef01edefb820b",
+      "package_subpath": "fixtures/historical-codegen-regression",
+      "source_hash": "a129e73533b2d496e082bec20d555d95eb868decd3b356f7a9424a8187733091"
+    },
+    "package_path": "fixtures/historical-codegen-regression",
+    "remote": "https://github.com/Riley-Kilgore/ak-equiv-check"
+  },
   "status_counts": {
-    "confirmed_non_equivalent": 2
+    "confirmed_non_equivalent": 1
   },
   "strict_pass": false
 }

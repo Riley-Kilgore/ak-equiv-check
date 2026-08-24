@@ -1,0 +1,15 @@
+{
+  "artifact_id": 9530920723,
+  "artifact_sha256": "7990f4d2e1436dbff085e090d56fef73549a47b9e6541492ed4028cda949cbad",
+  "attestation_kind": "public_ci_reproduction",
+  "baseline_content_id": "8392492fe07fe95bf7f68aa7821d025cfffc6463d1e07b2cc27a6e1b3a1ecb51",
+  "capture_command": "python scripts/capture_historical_baseline.py --profile historical-equivalent-v1.1.21-v1.1.22 --run 3c845a0c9ea2bea25703a92a6859407a5964a0196f07bdc4eab396e56e35802f --output results/baselines/historical-equivalent-v1.1.21-v1.1.22",
+  "github_run_id": 32755207919,
+  "job_id": 97521042377,
+  "platform": "ubuntu-24.04",
+  "profile_id": "historical-equivalent-v1.1.21-v1.1.22",
+  "repository_commit": "18a57afa5dedf5e1c7b24c749311cb7eafe0e0a6",
+  "schema_version": 2,
+  "verification_result": "verified",
+  "workflow_revision": "18a57afa5dedf5e1c7b24c749311cb7eafe0e0a6"
+}

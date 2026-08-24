@@ -1,7 +1,11 @@
 {
   "blaster_configuration": {
+    "cardano_ledger_api_blaster_revision": "577e3eb03b5be09354cfdb1c0d0c12e9e16541a0",
+    "checker_configuration_id": "fe24a655b674724d40083682824b22a5832fa6735a41c1f25ed45f51b8715558",
     "evaluator": {
-      "binary_sha256": "240e3340d8b999711e092f19929adc713dba78be5c2dafc645ccc5d56acf6dab",
+      "backend_kind": "aiken",
+      "binary_sha256": "748b9d45785fbded901ed87475072b6d20ee259bb4588c72428c12a19e8902d3",
+      "distinct_uplc_implementation": false,
       "evaluation_limits": {
         "cpu": 10000000000,
         "memory": 16500000,
@@ -9,19 +13,23 @@
       },
       "name": "aiken-uplc",
       "revision": "8949565a9969278846ffefe30bc3b892029dd318",
+      "separately_pinned": true,
+      "supported_limit_flags": [],
       "version": "v1.1.23"
     },
     "fuel_semantics": "maximum CEK transitions per concrete modeled input",
+    "generated_lean_schema_version": "equiv-generated-lean/v2",
+    "lean_blaster_revision": "402f6d22c1fc42e6e26255faac77e15b2450e4ab",
     "lean_version": "4.24.0",
+    "plutus_core_blaster_revision": "4ef48606303c45225d3ed2e2a87fc50280a763b7",
     "random_seed": 1,
-    "revisions": {
-      "CardanoLedgerApiBlaster": "577e3eb03b5be09354cfdb1c0d0c12e9e16541a0",
-      "Lean-blaster": "402f6d22c1fc42e6e26255faac77e15b2450e4ab",
-      "PlutusCoreBlaster": "4ef48606303c45225d3ed2e2a87fc50280a763b7"
-    },
-    "runtime_step_bound": 10000,
+    "secondary_evaluator": null,
+    "semantic_runtime_step_bound": 10000,
     "solver": "z3",
-    "solver_binary_sha256": "b8c06968b96f7b485382746cb8a956e131423ddd8be54ccdaed88b1466f5fc35",
+    "solver_binary_sha256": "4a84b0d866ced6c692c162cfe2f79baf7e5260dc71aff85b8fb5d30b47d76dbc",
+    "solver_configuration": {
+      "fuel_semantics": "maximum CEK transitions per concrete modeled input"
+    },
     "timeouts": {
       "aiken_build": 300.0,
       "blaster_optimization": 300.0,
@@ -32,21 +40,25 @@
       "uplc_preparation": 300.0,
       "z3": 120.0
     },
+    "uplc_importer_revision": "4ef48606303c45225d3ed2e2a87fc50280a763b7",
+    "uplc_preparer_revision": "4ef48606303c45225d3ed2e2a87fc50280a763b7",
     "z3_version": "4.15.2"
-  },
-  "blaster_dependencies": {
-    "CardanoLedgerApiBlaster": "577e3eb03b5be09354cfdb1c0d0c12e9e16541a0",
-    "Lean-blaster": "402f6d22c1fc42e6e26255faac77e15b2450e4ab",
-    "PlutusCoreBlaster": "4ef48606303c45225d3ed2e2a87fc50280a763b7"
   },
   "checker_configuration": {
     "feature_contract_sha256": null,
     "mode": "package",
     "require_script_difference": true,
-    "runner_sha256": "eadc7018740eed91dbcd141abc2b97d6337f4f505bd4f31ee3ae0b45d7c859a4",
+    "runner_sha256": "fddb87c613a8ccdb7390df5477c6ba5e699217415f9f3bdc83d1b09e821dec2d",
     "schema_version": 2,
     "semantic_contract": "forall raw_arguments, observe(old_program(raw_arguments)) = observe(new_program(raw_arguments))"
   },
-  "execution_environment": "darwin-arm64",
-  "schema_version": 1
+  "replay_trust": [
+    {
+      "distinct_uplc_implementation": false,
+      "separate_binary": true,
+      "separate_from_symbolic_model": true,
+      "separately_pinned": true
+    }
+  ],
+  "schema_version": 2
 }
