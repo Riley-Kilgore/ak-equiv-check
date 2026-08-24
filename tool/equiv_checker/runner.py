@@ -1615,6 +1615,7 @@ def compare_package(
             new_compiler_artifact_id=compilers[1].provenance.get(
                 "artifact_id", compilers[1].binary_sha256
             ),
+            require_verified_abi=strict,
         )
         discovered_pair_ids = {
             pair.program_pair_id for pair in pairing.program_pairs

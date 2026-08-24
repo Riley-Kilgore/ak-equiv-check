@@ -317,6 +317,7 @@ def capture(
         },
         "run_id": run_record["run_id"],
         "counts": counts,
+        "count_invariants": summary["count_invariants"],
         "status_counts": summary["status_counts"],
         "obligation_status_counts": summary["obligation_status_counts"],
         "strict_pass": summary["strict_pass"],

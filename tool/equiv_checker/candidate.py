@@ -510,10 +510,12 @@ def run_candidate_gate(
         and model["backend"].get("command")
     )
     deduplicated_count = sum(
-        _load(child / "summary.json")
-        .get("counts", {})
-        .get("deduplicated_invocation_count", 0)
+        counts.get(
+            "deduplicated_invocations",
+            counts.get("deduplicated_invocation_count", 0),
+        )
         for child in child_outputs
+        if (counts := _load(child / "summary.json").get("counts", {}))
     )
     changed_counts = _changed_pair_counts(changed_pairs, child_program_results)
     new_only_features = sum(

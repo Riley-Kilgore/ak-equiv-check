@@ -237,6 +237,42 @@ def _compiled_abi(
     }
 
 
+def _heuristic_abi(
+    validator: Validator,
+    plutus_version: str,
+) -> dict[str, Any]:
+    parameter_count = len(validator.parameters)
+    runtime_count = (
+        1
+        if plutus_version.lower() in {"v3", "plutusv3", "3"}
+        else 3
+        if validator.purpose == "spending"
+        else 2
+    )
+    argument_order = _runtime_argument_names(
+        parameter_count=parameter_count,
+        runtime_count=runtime_count,
+        purpose=validator.purpose,
+        plutus_version=plutus_version,
+    )
+    return {
+        "status": "heuristic",
+        "verified": False,
+        "top_level_callable_arity": parameter_count + runtime_count,
+        "applied_parameter_count": parameter_count,
+        "remaining_runtime_argument_count": runtime_count,
+        "argument_order": list(argument_order),
+        "argument_value_representation": ["PlutusData"] * len(argument_order),
+        "parameter_schemas": list(validator.parameters),
+        "plutus_version": plutus_version,
+        "source_handler_title": validator.title,
+        "source_purpose": validator.purpose,
+        "abi_derivation_method": "blueprint_signature_heuristic",
+        "abi_verifier_revision": None,
+        "parser_error": None,
+    }
+
+
 def _abi_comparison_identity(abi: dict[str, Any]) -> dict[str, Any]:
     return {
         key: abi[key]
@@ -296,6 +332,7 @@ def pair_validators(
     package: str | None = None,
     old_compiler_artifact_id: str = "unbound",
     new_compiler_artifact_id: str = "unbound",
+    require_verified_abi: bool = True,
 ) -> PairingResult:
     old_validators = discover_validators(old_blueprint)
     new_validators = discover_validators(new_blueprint)
@@ -405,6 +442,28 @@ def pair_validators(
             plutus_version,
             parser_error=new_abi_parser_error,
         )
+        if not require_verified_abi and (
+            old_abi["status"] != "verified" or new_abi["status"] != "verified"
+        ):
+            compatibility.append(
+                _compatibility(
+                    "raw_abi_heuristic",
+                    new,
+                    package_identity,
+                    package_path,
+                    old_abi=(
+                        old_abi
+                        if old_abi["status"] == "verified"
+                        else _heuristic_abi(old, plutus_version)
+                    ),
+                    new_abi=(
+                        new_abi
+                        if new_abi["status"] == "verified"
+                        else _heuristic_abi(new, plutus_version)
+                    ),
+                )
+            )
+            continue
         if old_abi["status"] == "parser_error" or new_abi["status"] == "parser_error":
             compatibility.append(
                 _compatibility(

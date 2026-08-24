@@ -263,6 +263,35 @@ class ValidatorPairingTests(unittest.TestCase):
                 {"raw_abi_parser_error"},
             )
 
+    def test_unverified_abi_is_heuristic_diagnostics_only_in_best_effort(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            row = validator()
+            old = self._blueprint(root / "old.json", [row])
+            new = self._blueprint(root / "new.json", [row])
+            result = pair_validators(
+                old,
+                new,
+                root / "bundle",
+                package_identity="source",
+                package_path="/package",
+                plutus_version="v3",
+                require_verified_abi=False,
+            )
+            self.assertEqual(result.program_pairs, ())
+            self.assertEqual(
+                {item["status"] for item in result.compatibility_results},
+                {"raw_abi_heuristic"},
+            )
+            diagnostic = result.compatibility_results[0]
+            self.assertFalse(diagnostic["old_abi"]["verified"])
+            self.assertEqual(
+                diagnostic["old_abi"]["abi_derivation_method"],
+                "blueprint_signature_heuristic",
+            )
+
     def test_zero_argument_program_has_a_verified_empty_abi(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

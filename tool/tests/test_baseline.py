@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import tempfile
 import unittest
@@ -21,6 +22,9 @@ def _write_ndjson(path: Path, records: list[dict]) -> None:
         "".join(json.dumps(row, sort_keys=True) + "\n" for row in records),
         encoding="utf-8",
     )
+
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class BaselineVerificationTests(unittest.TestCase):
@@ -67,6 +71,20 @@ class BaselineVerificationTests(unittest.TestCase):
                 "schema_version": 2,
                 "profile": {"profile_id": "profile"},
                 "source_provenance": {"dirty": False},
+                "counts": {
+                    "handler_pairs": 1,
+                    "handler_pair_records": 1,
+                    "unique_program_pairs": 1,
+                    "program_pair_records": 1,
+                    "program_state_total": 1,
+                    "semantic_obligation_records": 1,
+                    "obligation_result_records": 1,
+                    "obligation_state_total": 1,
+                },
+                "count_invariants": {
+                    "obligation_final_states_equal_unique_obligations": True,
+                    "program_final_states_equal_unique_program_pairs": True,
+                },
             },
         )
         (root / "summary.md").write_text("# Baseline\n", encoding="utf-8")
@@ -104,6 +122,27 @@ class BaselineVerificationTests(unittest.TestCase):
             },
         )
 
+    def test_capture_and_verifier_share_content_identity(self) -> None:
+        script = ROOT / "scripts" / "capture_historical_baseline.py"
+        specification = importlib.util.spec_from_file_location(
+            "capture_historical_baseline", script
+        )
+        assert specification is not None and specification.loader is not None
+        module = importlib.util.module_from_spec(specification)
+        specification.loader.exec_module(module)
+        checksums = {"summary.json": "1" * 64}
+        self.assertEqual(
+            module._identity(
+                "baseline-content",
+                {
+                    "schema_version": 2,
+                    "algorithm": "sha256",
+                    "files": checksums,
+                },
+            ),
+            baseline_content_id(checksums),
+        )
+
     def test_complete_baseline_and_attestation_verify(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -126,6 +165,40 @@ class BaselineVerificationTests(unittest.TestCase):
             attestation["baseline_content_id"] = "0" * 64
             _write_json(root / "ci-attestation.json", attestation)
             with self.assertRaises(ValueError):
+                verify_baseline(root)
+
+    def test_tampered_report_counts_are_rejected_after_rebinding(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._baseline(root)
+            summary = json.loads(
+                (root / "summary.json").read_text(encoding="utf-8")
+            )
+            summary["counts"]["unique_program_pairs"] = 2
+            _write_json(root / "summary.json", summary)
+            previous = json.loads(
+                (root / "checksums.json").read_text(encoding="utf-8")
+            )
+            checksums = {
+                name: hashlib.sha256((root / name).read_bytes()).hexdigest()
+                for name in previous["files"]
+            }
+            content_id = baseline_content_id(checksums)
+            _write_json(
+                root / "checksums.json",
+                {
+                    "schema_version": 2,
+                    "algorithm": "sha256",
+                    "baseline_content_id": content_id,
+                    "files": checksums,
+                },
+            )
+            attestation = json.loads(
+                (root / "ci-attestation.json").read_text(encoding="utf-8")
+            )
+            attestation["baseline_content_id"] = content_id
+            _write_json(root / "ci-attestation.json", attestation)
+            with self.assertRaisesRegex(ValueError, "count mismatch"):
                 verify_baseline(root)
 
 

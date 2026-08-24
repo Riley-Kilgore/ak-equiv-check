@@ -4,6 +4,7 @@ import hashlib
 from dataclasses import replace
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from equiv_checker.blaster import RealBlasterBackend
@@ -155,12 +156,78 @@ class RealBlasterGoldenTests(unittest.TestCase):
                 pair, pure_integer_input_model(), result.witness, output
             )
             self.assertTrue(replay["confirmed"])
+            self.assertEqual(
+                replay["replay_confidence"], "single_evaluator_confirmed"
+            )
             self.assertNotEqual(
                 replay["primary_evaluator"]["old_observation"],
                 replay["primary_evaluator"]["new_observation"],
             )
+            old_replay = replay["primary_evaluator"]["old"]
+            self.assertEqual(
+                old_replay["configured_limits"]["cpu"], 10_000_000_000
+            )
+            self.assertEqual(
+                old_replay["configured_limits"]["memory"], 16_500_000
+            )
+            self.assertNotIn("cpu", old_replay["effective_limits"])
+            self.assertNotIn("memory", old_replay["effective_limits"])
+            self.assertEqual(
+                old_replay["unenforced_limits"],
+                {"cpu": 10_000_000_000, "memory": 16_500_000},
+            )
+            self.assertIn(
+                "wall_timeout_seconds",
+                old_replay["externally_enforced_limits"],
+            )
             self.assertTrue((output / replay["artifact_path"]).is_file())
             self.assertNotIn("confirmed_non_equivalent", STRICT_PASSING_STATUSES)
+
+    def test_distinct_secondary_evaluator_records_cross_confirmation(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = self._output(Path(temporary))
+            pair = _pair(
+                "cross-confirmed", "identity.flat", "constant-zero.flat"
+            )
+            model = pure_integer_input_model()
+            result = self.backend.compare(pair, model, output)
+            assert result.witness is not None
+            primary = self.backend.config.evaluator
+            assert primary is not None
+            secondary = replace(
+                primary,
+                name="distinct-uplc",
+                revision="distinct-revision",
+                binary_sha256="f" * 64,
+                distinct_uplc_implementation=True,
+            )
+            backend = RealBlasterBackend(
+                replace(
+                    self.backend.config,
+                    secondary_evaluator=secondary,
+                )
+            )
+
+            def evaluate(_pair, label, _arguments, _root, _evaluator):
+                return {
+                    "ok": True,
+                    "outcome": (
+                        "program_success"
+                        if label == "old"
+                        else "program_failure"
+                    ),
+                }
+
+            with patch.object(
+                backend, "_evaluate_script", side_effect=evaluate
+            ):
+                replay = backend.replay(pair, model, result.witness, output)
+            self.assertTrue(replay["confirmed"])
+            self.assertEqual(
+                replay["replay_confidence"], "cross_evaluator_confirmed"
+            )
 
     def test_validator_falsification_is_independently_replayed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

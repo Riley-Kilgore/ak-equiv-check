@@ -543,9 +543,38 @@ def _prepare_output(output: Path) -> None:
 
 def _clone_checkout(source: Path | None, repository: str, checkout: Path, commit: str) -> None:
     if source is not None:
-        command = ["git", "clone", "--no-checkout", "--shared", str(source), str(checkout)]
+        promisor = run_process(
+            ["git", "config", "--bool", "remote.origin.promisor"],
+            source,
+            30.0,
+        )
+        if promisor.exit_code == 0 and promisor.stdout.strip() == "true":
+            command = [
+                "git",
+                "clone",
+                "--no-checkout",
+                "--filter=blob:none",
+                repository,
+                str(checkout),
+            ]
+        else:
+            command = [
+                "git",
+                "clone",
+                "--no-checkout",
+                "--no-local",
+                str(source),
+                str(checkout),
+            ]
     else:
-        command = ["git", "clone", "--no-checkout", "--filter=blob:none", repository, str(checkout)]
+        command = [
+            "git",
+            "clone",
+            "--no-checkout",
+            "--filter=blob:none",
+            repository,
+            str(checkout),
+        ]
     _checked(command, checkout.parent, timeout=600.0)
     _checked(["git", "-C", checkout, "checkout", "--detach", commit], checkout, timeout=300.0)
     actual = _git(checkout, "rev-parse", "HEAD")

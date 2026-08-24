@@ -151,6 +151,35 @@ def verify_baseline(path: Path) -> dict[str, Any]:
         if row.get("evidence_result_id") not in evidence_ids:
             raise ValueError("evidence lineage has no result parent")
 
+    counts = summary.get("counts")
+    if not isinstance(counts, dict):
+        raise ValueError("baseline summary counts are missing")
+    expected_counts = {
+        "handler_pairs": len(handler_pairs),
+        "handler_pair_records": len(handler_pairs),
+        "unique_program_pairs": len(program_pairs),
+        "program_pair_records": len(program_pairs),
+        "program_state_total": len(program_pairs),
+        "semantic_obligation_records": len(obligations),
+        "obligation_result_records": len(results),
+        "obligation_state_total": len(obligations),
+    }
+    for name, expected in expected_counts.items():
+        if counts.get(name) != expected:
+            raise ValueError(
+                f"baseline summary count mismatch for {name}: "
+                f"expected {expected}, got {counts.get(name)!r}"
+            )
+    invariants = summary.get("count_invariants")
+    required_invariants = {
+        "obligation_final_states_equal_unique_obligations",
+        "program_final_states_equal_unique_program_pairs",
+    }
+    if not isinstance(invariants, dict) or any(
+        invariants.get(name) is not True for name in required_invariants
+    ):
+        raise ValueError("baseline summary count invariants do not hold")
+
     attestation = _read_json(root / "ci-attestation.json")
     required_attestation = {
         "baseline_content_id",

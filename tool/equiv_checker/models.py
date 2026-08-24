@@ -49,6 +49,7 @@ FINAL_STATUSES = frozenset(
         "raw_abi_mismatch",
         "raw_abi_parser_error",
         "raw_model_not_bound_to_abi",
+        "raw_abi_heuristic",
         "new_blueprint_missing",
         "old_blueprint_malformed",
         "new_blueprint_malformed",

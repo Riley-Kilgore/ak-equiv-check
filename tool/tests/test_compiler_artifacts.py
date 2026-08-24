@@ -382,5 +382,41 @@ class CompilerArtifactTests(unittest.TestCase):
                         output / "compiler.json", lock_path
                     )
 
+    @patch(
+        "equiv_checker.compiler_artifacts._build_binary",
+        side_effect=_fake_builder(),
+    )
+    def test_release_build_from_linked_worktree_uses_common_objects(
+        self, _build
+    ) -> None:
+        linked = self.root / "linked-worktree"
+        _git(self.source, "worktree", "add", "--detach", str(linked))
+        manifest = build_release(
+            ref="v1.1.21",
+            output=self.root / "linked-release",
+            aiken_source=linked,
+        )
+        self.assertEqual(manifest["source"]["ref"], "v1.1.21")
+        self.assertEqual(
+            manifest["source"]["cargo_lock_sha256"],
+            hashlib.sha256(b"version = 4\n").hexdigest(),
+        )
+
+    @patch(
+        "equiv_checker.compiler_artifacts._build_binary",
+        side_effect=_fake_builder(),
+    )
+    def test_compiler_binary_tampering_is_rejected(self, _build) -> None:
+        output = self.root / "tampered-release"
+        manifest = build_release(
+            ref="v1.1.23",
+            output=output,
+            aiken_source=self.source,
+        )
+        binary = output / manifest["binary"]["path"]
+        binary.write_bytes(binary.read_bytes() + b"tampered")
+        with self.assertRaises(RuntimeError):
+            verify_compiler_manifest(output / "compiler.json")
+
 if __name__ == "__main__":
     unittest.main()
