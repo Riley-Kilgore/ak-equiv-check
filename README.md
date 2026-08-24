@@ -25,7 +25,7 @@ bin/aiken-v1.1.23
 work/toolchains/<pinned-z3>/bin/z3
 ```
 
-`corpus/compiler_pair.json` records compiler releases, full revisions, archive hashes, binary hashes, and platform artifacts. `tool/blaster_config.json` pins Lean 4.24.0, Z3 4.15.2, the Blaster repositories, the independent evaluator, all stage timeouts, random seed, and the semantic runtime bound.
+`corpus/compiler_pair.json` records compiler releases, full revisions, archive hashes, binary hashes, and platform artifacts. `tool/blaster_config.json` pins Lean 4.24.0, Z3 4.15.2, the Blaster repositories, the separately pinned Aiken replay evaluator, all stage timeouts, random seed, and the semantic runtime bound.
 
 ## Released and local compiler artifacts
 
@@ -209,6 +209,37 @@ not_applicable
 ```
 
 Missing locks or evidence, bounded results, unsupported models or purposes, non-vacuity failures, preparation exhaustion, timeouts, solver errors, malformed witnesses, unreplayed falsifications, compatibility changes, and confirmed differences all fail closed.
+
+## Evidence identities
+
+All evidence IDs are SHA-256 hashes of canonical JSON envelopes carrying
+`identity_schema_version = equiv-evidence-identity/v2` and an identity kind.
+The payloads are deliberately separate:
+
+- A program artifact binds the serialized-script SHA-256, Plutus version, and
+  serialization format. Its record also carries byte size, source-validator
+  references, and compiler artifact ID.
+- A program pair binds only the ordered old and new program-artifact IDs and
+  the verified ABI ID. Paths, host data, timestamps, handler titles, and policy
+  do not affect it.
+- A semantic model binds its version and profile, variable types, argument
+  order, arity, domain predicate and assumptions, observation, and semantic
+  runtime bound. Ledger-valid models additionally bind the purpose-specific
+  ledger predicate.
+- A logical obligation binds the program-pair ID, semantic-model ID, and one
+  explicit obligation kind.
+- A checker configuration binds the generated-Lean schema, Lean and Z3
+  versions, pinned Blaster/importer/preparer revisions, solver binary, and
+  relevant solver configuration.
+- An attempt binds the logical obligation and checker configuration to the
+  random seed, solver and process timeouts, platform identity, and attempt
+  sequence.
+
+Strict and screening policies decide over evidence; they are not logical
+obligation identities. Cache reuse requires the logical obligation, checker
+configuration, program hashes, verified ABI, semantic model, and generated
+source schema to match. Reuse records the original and new attempts plus the
+validated artifact checksum.
 
 ## Result, witness, and replay protocols
 

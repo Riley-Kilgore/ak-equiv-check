@@ -434,6 +434,10 @@ def verify_baseline(path: Path) -> dict[str, Any]:
             "semantic_obligations": len(obligations),
             "obligation_results": len(results),
             "lineage_records": len(lineage),
+            "validator_links": len(validator_links),
+            "feature_links": len(feature_links),
+            "task_results": len(task_results),
+            "replayed_results": sum("replay" in row for row in results),
         },
         "ci_attestation": attestation,
     }
