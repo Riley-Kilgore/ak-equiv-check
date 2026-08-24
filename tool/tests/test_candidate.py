@@ -204,7 +204,7 @@ class CandidateGateTests(unittest.TestCase):
                 ),
                 patch(
                     "equiv_checker.candidate.verify_release_lock",
-                    return_value={"valid": True},
+                    return_value={"valid": True, "release_lock_sha256": "9" * 64},
                 ),
                 patch(
                     "equiv_checker.candidate.compiler_from_manifest",
