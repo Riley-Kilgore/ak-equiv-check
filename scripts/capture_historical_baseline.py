@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -456,4 +457,10 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except Exception as error:
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            detail = f"{type(error).__name__}: {error}".replace("%", "%25")
+            print(f"::error title=Historical baseline capture failed::{detail}")
+        raise
