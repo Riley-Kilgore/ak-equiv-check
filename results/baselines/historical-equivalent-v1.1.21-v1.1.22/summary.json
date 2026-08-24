@@ -13,7 +13,8 @@
     "deduplicated_obligations": 12,
     "equivalent_under_ledger_model_obligations": 0,
     "equivalent_under_raw_model_obligations": 12,
-    "feature_rows": 0,
+    "feature_link_records": 3,
+    "feature_rows": 3,
     "handler_pair_records": 6,
     "handler_pairs": 6,
     "identical_program_pairs": 0,
@@ -33,6 +34,8 @@
     "unique_raw_obligations": 12,
     "unreplayed_falsifications": 0,
     "unsupported_obligations": 12,
+    "validator_handlers": 6,
+    "validator_link_records": 6,
     "validator_records_new": 6,
     "validator_records_old": 6
   },
@@ -58,19 +61,19 @@
     ],
     "semantic_strict_result": "pass"
   },
-  "run_id": "3c845a0c9ea2bea25703a92a6859407a5964a0196f07bdc4eab396e56e35802f",
+  "run_id": "a63cb93c767d4c47c889dc500c9a83450320fe5dbbc8323798277be607fa3a3a",
   "schema_version": 2,
   "script_difference_observed": true,
   "source_provenance": {
-    "commit": "18a57afa5dedf5e1c7b24c749311cb7eafe0e0a6",
+    "commit": "4e16a60ef5ccac2a0f869b8c62f13f2f973ee996",
     "dirty": false,
-    "identity": "9c607f1bfed8fd3f7702c9b53eff2906dc031d12f8395807f74493bf4aa271ea",
+    "identity": "7f6eed4e01d87b64c7293fc2c493084895ebc0ea0c9b3342354d1c02976fb943",
     "identity_fields": {
       "adapter_hash": null,
       "canonical_repository_url": "https://github.com/Riley-Kilgore/ak-equiv-check",
       "dependency_lock_hash": "88ea28f7520d83d207bae89c30e2f6a2d27b337e36eb19b59a5ef01edefb820b",
       "package_subpath": "fixtures/historical-codegen-equivalent",
-      "revision": "18a57afa5dedf5e1c7b24c749311cb7eafe0e0a6",
+      "revision": "4e16a60ef5ccac2a0f869b8c62f13f2f973ee996",
       "source_hash": "91be68619b8a34d8461620b60082b3e6f1fb81c61a1bbff62c871782bc31cacc"
     },
     "kind": "git",

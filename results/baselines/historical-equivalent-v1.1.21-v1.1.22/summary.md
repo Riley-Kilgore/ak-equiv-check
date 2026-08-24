@@ -19,7 +19,8 @@
 | `deduplicated_obligations` | 12 |
 | `equivalent_under_ledger_model_obligations` | 0 |
 | `equivalent_under_raw_model_obligations` | 12 |
-| `feature_rows` | 0 |
+| `feature_link_records` | 3 |
+| `feature_rows` | 3 |
 | `handler_pair_records` | 6 |
 | `handler_pairs` | 6 |
 | `identical_program_pairs` | 0 |
@@ -39,6 +40,8 @@
 | `unique_raw_obligations` | 12 |
 | `unreplayed_falsifications` | 0 |
 | `unsupported_obligations` | 12 |
+| `validator_handlers` | 6 |
+| `validator_link_records` | 6 |
 | `validator_records_new` | 6 |
 | `validator_records_old` | 6 |
 
