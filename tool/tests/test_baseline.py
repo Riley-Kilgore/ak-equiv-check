@@ -167,6 +167,26 @@ class BaselineVerificationTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 verify_baseline(root)
 
+    def test_ci_attestation_identity_fields_are_strictly_validated(self) -> None:
+        cases = (
+            ("profile_id", "other", "profile identity"),
+            ("repository_commit", "not-a-commit", "repository_commit"),
+            ("job_id", 0, "job_id"),
+            ("artifact_sha256", "z" * 64, "artifact SHA-256"),
+        )
+        for field, value, message in cases:
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                self._baseline(root)
+                attestation = json.loads(
+                    (root / "ci-attestation.json").read_text(encoding="utf-8")
+                )
+                attestation[field] = value
+                _write_json(root / "ci-attestation.json", attestation)
+                with self.assertRaisesRegex(ValueError, message):
+                    verify_baseline(root)
+
+
     def test_tampered_report_counts_are_rejected_after_rebinding(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

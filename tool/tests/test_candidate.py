@@ -20,6 +20,27 @@ def _write(path: Path, value: object) -> None:
 
 
 class CandidateGateTests(unittest.TestCase):
+    def test_candidate_gate_rejects_nonlocal_candidate_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with patch(
+                "equiv_checker.candidate.verify_compiler_manifest",
+                side_effect=[
+                    {"artifact_id": "a" * 64, "artifact_kind": "release"},
+                    {"artifact_id": "b" * 64, "artifact_kind": "release"},
+                ],
+            ), self.assertRaisesRegex(ValueError, "not a local build"):
+                run_candidate_gate(
+                    base_compiler_manifest=root / "base.json",
+                    candidate_compiler_manifest=root / "candidate.json",
+                    feature_contract=root / "features.json",
+                    corpus_lock=root / "corpus.json",
+                    scope={"sentinel"},
+                    resume=True,
+                    policy="strict",
+                    work_root=root / "work",
+                )
+
     def test_program_pair_merge_unions_nested_source_references(self) -> None:
         artifact = {
             "program_artifact_id": "a" * 64,
@@ -172,6 +193,7 @@ class CandidateGateTests(unittest.TestCase):
             }
             candidate_manifest = {
                 "artifact_id": "b" * 64,
+                "artifact_kind": "local",
                 "source": {"dirty": True},
             }
             compilers = {

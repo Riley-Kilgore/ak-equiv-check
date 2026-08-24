@@ -288,6 +288,8 @@ def run_candidate_gate(
     work = work_root.expanduser().resolve()
     base_manifest = verify_compiler_manifest(base_path)
     candidate_manifest = verify_compiler_manifest(candidate_path)
+    if candidate_manifest.get("artifact_kind") != "local":
+        raise ValueError("candidate compiler manifest is not a local build artifact")
     base_lock_validation = verify_release_lock(base_path, release_lock)
     compilers = (
         compiler_from_manifest("old", base_path),

@@ -210,9 +210,32 @@ def verify_baseline(path: Path) -> dict[str, Any]:
         raise ValueError("CI baseline verification did not succeed")
     if attestation.get("baseline_content_id") != content_id:
         raise ValueError("CI attestation content identity mismatch")
+    if attestation.get("profile_id") != summary.get("profile", {}).get(
+        "profile_id"
+    ):
+        raise ValueError("CI attestation profile identity mismatch")
+    for field in ("repository_commit", "workflow_revision"):
+        value = attestation.get(field)
+        if (
+            not isinstance(value, str)
+            or len(value) != 40
+            or any(character not in "0123456789abcdef" for character in value)
+        ):
+            raise ValueError(f"CI attestation {field} is invalid")
+    for field in ("github_run_id", "job_id", "artifact_id"):
+        value = attestation.get(field)
+        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+            raise ValueError(f"CI attestation {field} is invalid")
     artifact_sha = attestation.get("artifact_sha256")
-    if not isinstance(artifact_sha, str) or len(artifact_sha) != 64:
+    if (
+        not isinstance(artifact_sha, str)
+        or len(artifact_sha) != 64
+        or any(character not in "0123456789abcdef" for character in artifact_sha)
+    ):
         raise ValueError("CI artifact SHA-256 is invalid")
+    for field in ("platform", "capture_command"):
+        if not isinstance(attestation.get(field), str) or not attestation[field]:
+            raise ValueError(f"CI attestation {field} is invalid")
 
     return {
         "schema_version": 2,
