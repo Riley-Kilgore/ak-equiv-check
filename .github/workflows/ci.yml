@@ -16,13 +16,16 @@ on:
           - sentinel
           - first-wave
           - full-corpus
+permissions:
+  contents: write
+
 
 jobs:
   unit:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
           version: "0.8.13"
           enable-cache: true
@@ -45,6 +48,55 @@ jobs:
           tests.test_blueprints
           tests.test_compiler_artifacts
           tests.test_profiles
+          tests.test_evidence
+          tests.test_candidate
+          tests.test_baseline
+      - name: Verify checked historical baseline identities
+        working-directory: tool
+        run: |
+          uv run equiv-checker baseline verify ../results/baselines/historical-equivalent-v1.1.21-v1.1.22
+          uv run equiv-checker baseline verify ../results/baselines/historical-regression-v1.1.22-v1.1.23
+
+  evidence-integrity:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          version: "0.8.13"
+          enable-cache: true
+      - name: Install Python dependencies
+        working-directory: tool
+        run: uv sync --locked
+      - name: Run identity, tamper, protocol, cache, deduplication, and report tests
+        working-directory: tool
+        env:
+          PYTHONPATH: tests
+        run: >-
+          uv run python -m unittest -v
+          test_evidence
+          test_blaster
+          test_pairing
+          test_runner
+          test_baseline
+
+
+  baseline-v2-verification:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          version: "0.8.13"
+          enable-cache: true
+      - name: Install Python dependencies
+        working-directory: tool
+        run: uv sync --locked
+      - name: Verify both schema-version-2 historical baselines
+        working-directory: tool
+        run: |
+          uv run equiv-checker baseline verify ../results/baselines/historical-equivalent-v1.1.21-v1.1.22
+          uv run equiv-checker baseline verify ../results/baselines/historical-regression-v1.1.22-v1.1.23
 
   historical-equivalent:
     if: >-
@@ -52,13 +104,18 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-24.04
+    outputs:
+      artifact-id: ${{ steps.baseline-upload.outputs.artifact-id }}
+      artifact-digest: ${{ steps.baseline-upload.outputs.artifact-digest }}
+      baseline-content-id: ${{ steps.baseline-capture.outputs.content-id }}
+      baseline-run-id: ${{ steps.baseline-capture.outputs.run-id }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
           version: "0.8.13"
           enable-cache: true
-      - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # v1
+      - uses: leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596 # v1
         with:
           use-github-cache: true
           use-mathlib-cache: false
@@ -68,7 +125,7 @@ jobs:
           test: false
           lint: false
       - name: Restore historical compiler cache
-        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: |
             .ak-equiv/compilers/*/bin/
@@ -94,10 +151,28 @@ jobs:
         run: uv run equiv-checker profile lock historical-equivalent-v1.1.21-v1.1.22
       - name: Run released positive profile with real Blaster
         working-directory: tool
-        run: uv run equiv-checker profile run historical-equivalent-v1.1.21-v1.1.22 --resume
+        run: mkdir -p ../work && uv run equiv-checker profile run historical-equivalent-v1.1.21-v1.1.22 --resume | tee ../work/historical-equivalent-result.json
+      - name: Capture unattested schema-version-2 positive baseline
+        id: baseline-capture
+        working-directory: tool
+        run: |
+          RUN_DIR="$(jq -r .output ../work/historical-equivalent-result.json)"
+          uv run python ../scripts/capture_historical_baseline.py \
+            --profile historical-equivalent-v1.1.21-v1.1.22 \
+            --run "$RUN_DIR" \
+            --output ../work/ci-baselines/historical-equivalent-v1.1.21-v1.1.22
+          echo "run-id=$(jq -r .run_id ../work/ci-baselines/historical-equivalent-v1.1.21-v1.1.22/summary.json)" >> "$GITHUB_OUTPUT"
+          echo "content-id=$(jq -r .baseline_content_id ../work/ci-baselines/historical-equivalent-v1.1.21-v1.1.22/checksums.json)" >> "$GITHUB_OUTPUT"
+      - name: Upload compact positive baseline
+        id: baseline-upload
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: baseline-v2-positive-${{ github.run_id }}
+          path: work/ci-baselines/historical-equivalent-v1.1.21-v1.1.22/
+          if-no-files-found: error
       - name: Upload complete positive evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: historical-equivalent-${{ github.run_id }}
           path: |
@@ -114,13 +189,18 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-24.04
+    outputs:
+      artifact-id: ${{ steps.baseline-upload.outputs.artifact-id }}
+      artifact-digest: ${{ steps.baseline-upload.outputs.artifact-digest }}
+      baseline-content-id: ${{ steps.baseline-capture.outputs.content-id }}
+      baseline-run-id: ${{ steps.baseline-capture.outputs.run-id }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
           version: "0.8.13"
           enable-cache: true
-      - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # v1
+      - uses: leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596 # v1
         with:
           use-github-cache: true
           use-mathlib-cache: false
@@ -130,7 +210,7 @@ jobs:
           test: false
           lint: false
       - name: Restore historical compiler cache
-        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: |
             .ak-equiv/compilers/*/bin/
@@ -156,10 +236,28 @@ jobs:
         run: uv run equiv-checker profile lock historical-regression-v1.1.22-v1.1.23
       - name: Run released negative profile and independent replay
         working-directory: tool
-        run: uv run equiv-checker profile run historical-regression-v1.1.22-v1.1.23 --resume
+        run: mkdir -p ../work && uv run equiv-checker profile run historical-regression-v1.1.22-v1.1.23 --resume | tee ../work/historical-regression-result.json
+      - name: Capture unattested schema-version-2 negative baseline
+        id: baseline-capture
+        working-directory: tool
+        run: |
+          RUN_DIR="$(jq -r .output ../work/historical-regression-result.json)"
+          uv run python ../scripts/capture_historical_baseline.py \
+            --profile historical-regression-v1.1.22-v1.1.23 \
+            --run "$RUN_DIR" \
+            --output ../work/ci-baselines/historical-regression-v1.1.22-v1.1.23
+          echo "run-id=$(jq -r .run_id ../work/ci-baselines/historical-regression-v1.1.22-v1.1.23/summary.json)" >> "$GITHUB_OUTPUT"
+          echo "content-id=$(jq -r .baseline_content_id ../work/ci-baselines/historical-regression-v1.1.22-v1.1.23/checksums.json)" >> "$GITHUB_OUTPUT"
+      - name: Upload compact negative baseline
+        id: baseline-upload
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: baseline-v2-negative-${{ github.run_id }}
+          path: work/ci-baselines/historical-regression-v1.1.22-v1.1.23/
+          if-no-files-found: error
       - name: Upload complete negative evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: historical-regression-${{ github.run_id }}
           path: |
@@ -170,63 +268,173 @@ jobs:
             work/runs/
           if-no-files-found: error
 
-  local-compiler-build-smoke:
+  baseline-v2-publication:
     if: >-
-      github.event_name == 'schedule' ||
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      !contains(github.event.head_commit.message, '[baseline-v2]')
+    needs:
+      - historical-equivalent
+      - historical-regression
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: main
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
           version: "0.8.13"
           enable-cache: true
       - name: Install Python dependencies
         working-directory: tool
         run: uv sync --locked
+      - name: Download positive compact baseline
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: baseline-v2-positive-${{ github.run_id }}
+          path: incoming-positive
+      - name: Download negative compact baseline
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: baseline-v2-negative-${{ github.run_id }}
+          path: incoming-negative
+      - name: Bind public CI attestations to baseline content
+        env:
+          GH_TOKEN: ${{ github.token }}
+          POSITIVE_ARTIFACT_ID: ${{ needs.historical-equivalent.outputs.artifact-id }}
+          POSITIVE_ARTIFACT_DIGEST: ${{ needs.historical-equivalent.outputs.artifact-digest }}
+          POSITIVE_CONTENT_ID: ${{ needs.historical-equivalent.outputs.baseline-content-id }}
+          POSITIVE_RUN_ID: ${{ needs.historical-equivalent.outputs.baseline-run-id }}
+          NEGATIVE_ARTIFACT_ID: ${{ needs.historical-regression.outputs.artifact-id }}
+          NEGATIVE_ARTIFACT_DIGEST: ${{ needs.historical-regression.outputs.artifact-digest }}
+          NEGATIVE_CONTENT_ID: ${{ needs.historical-regression.outputs.baseline-content-id }}
+          NEGATIVE_RUN_ID: ${{ needs.historical-regression.outputs.baseline-run-id }}
+        run: |
+          POSITIVE_JOB_ID="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs" --jq '.jobs[] | select(.name == "historical-equivalent") | .id')"
+          NEGATIVE_JOB_ID="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs" --jq '.jobs[] | select(.name == "historical-regression") | .id')"
+          jq -n \
+            --arg profile historical-equivalent-v1.1.21-v1.1.22 \
+            --arg run "$POSITIVE_RUN_ID" \
+            --arg head "$GITHUB_SHA" \
+            --arg digest "sha256:${POSITIVE_ARTIFACT_DIGEST#sha256:}" \
+            --argjson workflow "$GITHUB_RUN_ID" \
+            --argjson job "$POSITIVE_JOB_ID" \
+            --argjson artifact "$POSITIVE_ARTIFACT_ID" \
+            '{profile_id:$profile,baseline_run_id:$run,workflow_revision:$head,platform:"ubuntu-24.04",workflow_run:{id:$workflow,head_sha:$head,conclusion:"success"},job:{id:$job,conclusion:"success"},artifact:{id:$artifact,digest:$digest}}' \
+            > positive-ci-provenance.json
+          jq -n \
+            --arg profile historical-regression-v1.1.22-v1.1.23 \
+            --arg run "$NEGATIVE_RUN_ID" \
+            --arg head "$GITHUB_SHA" \
+            --arg digest "sha256:${NEGATIVE_ARTIFACT_DIGEST#sha256:}" \
+            --argjson workflow "$GITHUB_RUN_ID" \
+            --argjson job "$NEGATIVE_JOB_ID" \
+            --argjson artifact "$NEGATIVE_ARTIFACT_ID" \
+            '{profile_id:$profile,baseline_run_id:$run,workflow_revision:$head,platform:"ubuntu-24.04",workflow_run:{id:$workflow,head_sha:$head,conclusion:"success"},job:{id:$job,conclusion:"success"},artifact:{id:$artifact,digest:$digest}}' \
+            > negative-ci-provenance.json
+          test "$(jq -r .baseline_content_id incoming-positive/checksums.json)" = "$POSITIVE_CONTENT_ID"
+          test "$(jq -r .baseline_content_id incoming-negative/checksums.json)" = "$NEGATIVE_CONTENT_ID"
+          uv run --directory tool python ../scripts/capture_historical_baseline.py \
+            --profile historical-equivalent-v1.1.21-v1.1.22 \
+            --baseline ../incoming-positive \
+            --ci-provenance ../positive-ci-provenance.json
+          uv run --directory tool python ../scripts/capture_historical_baseline.py \
+            --profile historical-regression-v1.1.22-v1.1.23 \
+            --baseline ../incoming-negative \
+            --ci-provenance ../negative-ci-provenance.json
+          python3 -c 'import shutil; from pathlib import Path; pairs=(("incoming-positive","results/baselines/historical-equivalent-v1.1.21-v1.1.22"),("incoming-negative","results/baselines/historical-regression-v1.1.22-v1.1.23")); [(shutil.rmtree(dst, ignore_errors=True), shutil.copytree(src, dst)) for src, dst in pairs]'
+          uv run --directory tool equiv-checker baseline verify ../results/baselines/historical-equivalent-v1.1.21-v1.1.22
+          uv run --directory tool equiv-checker baseline verify ../results/baselines/historical-regression-v1.1.22-v1.1.23
+      - name: Publish attested schema-version-2 baselines
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add results/baselines/historical-equivalent-v1.1.21-v1.1.22 results/baselines/historical-regression-v1.1.22-v1.1.23
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "Publish schema v2 historical baselines [baseline-v2]"
+          git push origin HEAD:main
+
+  local-candidate-changed-output:
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          version: "0.8.13"
+          enable-cache: true
+      - uses: leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596 # v1
+        with:
+          use-github-cache: true
+          use-mathlib-cache: false
+          lake-package-directory: tool/blaster-backend
+          build: true
+          build-args: CardanoLedgerApi
+          test: false
+          lint: false
+      - name: Install Python dependencies
+        working-directory: tool
+        run: uv sync --locked
       - name: Install and verify pinned evaluator and Z3
         run: python3 scripts/setup_toolchains.py
-      - name: Create two clean Aiken worktrees at the locked base
+      - name: Create clean Aiken release and candidate worktrees
         run: |
-          git clone --filter=blob:none https://github.com/aiken-lang/aiken.git "$RUNNER_TEMP/aiken-base"
-          git -C "$RUNNER_TEMP/aiken-base" checkout 8949565a9969278846ffefe30bc3b892029dd318
-          git -C "$RUNNER_TEMP/aiken-base" worktree add --detach "$RUNNER_TEMP/aiken-candidate" 8949565a9969278846ffefe30bc3b892029dd318
-      - name: Build release and local interfaces independently
+          git clone --filter=blob:none https://github.com/aiken-lang/aiken.git "$RUNNER_TEMP/aiken"
+          git -C "$RUNNER_TEMP/aiken" worktree add --detach "$RUNNER_TEMP/aiken-v1.1.21" 42babe5d5fcdd403ed58ed924fdc2aed331ede4d
+          git -C "$RUNNER_TEMP/aiken" worktree add --detach "$RUNNER_TEMP/aiken-v1.1.22" 39d6b049da08816aa51c9f8d3d73b9d292922f45
+          git -C "$RUNNER_TEMP/aiken" worktree add --detach "$RUNNER_TEMP/aiken-v1.1.23" 8949565a9969278846ffefe30bc3b892029dd318
+      - name: Build changed-output release and local candidate interfaces
         working-directory: tool
         run: |
-          uv run equiv-checker compiler build-release --aiken-source "$RUNNER_TEMP/aiken-base" --ref v1.1.23 --label base --output ../.ak-equiv/compilers/base
-          uv run equiv-checker compiler build-local --aiken-source "$RUNNER_TEMP/aiken-candidate" --label candidate --output ../.ak-equiv/compilers/candidate
-      - name: Compare the same package through compiler manifests
+          uv run equiv-checker compiler build-release --aiken-source "$RUNNER_TEMP/aiken-v1.1.21" --ref v1.1.21 --label base-changed --output ../.ak-equiv/compilers/base-changed
+          uv run equiv-checker compiler build-local --aiken-source "$RUNNER_TEMP/aiken-v1.1.22" --label candidate-changed --output ../.ak-equiv/compilers/candidate-changed
+      - name: Prove non-identical local candidate output strictly equivalent
         working-directory: tool
         run: >-
-          uv run equiv-checker compare ../fixtures/historical-codegen-equivalent
-          --old-compiler-manifest ../.ak-equiv/compilers/base/compiler.json
-          --new-compiler-manifest ../.ak-equiv/compilers/candidate/compiler.json
+          uv run equiv-checker profile run local-candidate-v1.1.21-v1.1.22
+          --old-compiler-manifest ../.ak-equiv/compilers/base-changed/compiler.json
+          --new-compiler-manifest ../.ak-equiv/compilers/candidate-changed/compiler.json
+          --resume
           --strict
-      - name: Upload local compiler provenance
+      - name: Build and run the current same-source smoke
+        working-directory: tool
+        run: |
+          uv run equiv-checker compiler build-release --aiken-source "$RUNNER_TEMP/aiken-v1.1.23" --ref v1.1.23 --label base-current --output ../.ak-equiv/compilers/base-current
+          uv run equiv-checker compiler build-local --aiken-source "$RUNNER_TEMP/aiken-v1.1.23" --label candidate-current --output ../.ak-equiv/compilers/candidate-current
+          uv run equiv-checker profile run local-candidate --old-compiler-manifest ../.ak-equiv/compilers/base-current/compiler.json --new-compiler-manifest ../.ak-equiv/compilers/candidate-current/compiler.json --resume --strict
+      - name: Upload local candidate provenance and semantic evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
-          name: local-compiler-build-${{ github.run_id }}
+          name: local-candidate-changed-output-${{ github.run_id }}
           path: |
-            .ak-equiv/compilers/base/compiler.json
-            .ak-equiv/compilers/base/logs/
-            .ak-equiv/compilers/candidate/compiler.json
-            .ak-equiv/compilers/candidate/logs/
+            .ak-equiv/compilers/base-changed/compiler.json
+            .ak-equiv/compilers/base-changed/logs/
+            .ak-equiv/compilers/candidate-changed/compiler.json
+            .ak-equiv/compilers/candidate-changed/logs/
+            .ak-equiv/compilers/base-current/compiler.json
+            .ak-equiv/compilers/base-current/logs/
+            .ak-equiv/compilers/candidate-current/compiler.json
+            .ak-equiv/compilers/candidate-current/logs/
             work/runs/
           if-no-files-found: error
+
 
   real-smoke:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
           version: "0.8.13"
           enable-cache: true
-      - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # v1
+      - uses: leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596 # v1
         with:
           use-github-cache: true
           use-mathlib-cache: false
@@ -252,12 +460,12 @@ jobs:
     needs: real-smoke
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
           version: "0.8.13"
           enable-cache: true
-      - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # v1
+      - uses: leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596 # v1
         with:
           use-github-cache: true
           use-mathlib-cache: false
@@ -322,7 +530,7 @@ jobs:
           --corpus-run "$(jq -r .output ../work/corpus-summary.json)"
       - name: Upload result bundles
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: equivalence-${{ inputs.scope }}-${{ github.run_id }}
           path: |

@@ -115,13 +115,19 @@ class CompiledAbiTests(unittest.TestCase):
                 old_abi_inspection=self._inspection(path),
                 new_abi_inspection=self._inspection(path),
             )
-        self.assertTrue(result.pairs)
-        for pair in result.pairs:
-            self.assertTrue(pair.abi["verified"])
-            self.assertTrue(pair.abi["equal"])
-            self.assertEqual(pair.abi["old"]["top_level_callable_arity"], 2)
-            self.assertEqual(pair.abi["old"]["remaining_runtime_argument_count"], 1)
-            self.assertEqual(pair.abi["old"]["argument_order"][-1], "script_context_data")
+        self.assertTrue(result.program_pairs)
+        for pair in result.program_pairs:
+            self.assertEqual(pair.verified_abi["status"], "verified")
+            self.assertEqual(
+                pair.verified_abi["top_level_callable_arity"], 2
+            )
+            self.assertEqual(
+                pair.verified_abi["remaining_runtime_argument_count"], 1
+            )
+            self.assertEqual(
+                pair.verified_abi["argument_order"][-1],
+                "script_context_data",
+            )
 
     def test_compiled_abi_mismatch_fails_before_semantics(self) -> None:
         path = FIXTURES / "aiken-v1.1.22.json"
@@ -136,10 +142,10 @@ class CompiledAbiTests(unittest.TestCase):
                 old_abi_inspection=self._inspection(path, 2),
                 new_abi_inspection=self._inspection(path, 3),
             )
-        self.assertFalse(result.pairs)
+        self.assertFalse(result.program_pairs)
         self.assertEqual(
             {row["status"] for row in result.compatibility_results},
-            {"compiled_abi_mismatch"},
+            {"raw_abi_mismatch"},
         )
 
 

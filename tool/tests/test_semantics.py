@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from equiv_checker.models import ScriptArtifact, ScriptPair
+from equiv_checker.models import ScriptArtifact, ProgramPairRecord
 from equiv_checker.semantics import (
     EQUIVALENCE_FORMULA,
     ledger_validator_input_model,
@@ -22,7 +22,7 @@ class SemanticContractTests(unittest.TestCase):
         root: Path,
         purpose: str = "spending",
         plutus_version: str = "v3",
-    ) -> ScriptPair:
+    ) -> ProgramPairRecord:
         script = root / "script.flat"
         script.write_text(IDENTITY_HEX + "\n", encoding="ascii")
         raw = bytes.fromhex(IDENTITY_HEX)
@@ -32,14 +32,29 @@ class SemanticContractTests(unittest.TestCase):
             sha256=hashlib.sha256(raw).hexdigest(),
             size=len(raw),
         )
-        return ScriptPair(
-            pair_id="pair",
-            validator_identity={},
+        argument_order = ["parameter0", "script_context_data"]
+        return ProgramPairRecord(
+            program_pair_id="pair",
             old_script=artifact,
             new_script=artifact,
-            purpose=purpose,
-            parameters=({"title": "parameter", "schema": {}},),
+            verified_abi_id="abi",
+            verified_abi={
+                "status": "verified",
+                "top_level_callable_arity": 2,
+                "applied_parameter_count": 1,
+                "remaining_runtime_argument_count": 1,
+                "argument_order": argument_order,
+                "argument_value_representation": ["PlutusData"] * 2,
+                "parameter_schemas": [
+                    {"title": "parameter", "schema": {}}
+                ],
+                "plutus_version": plutus_version,
+            },
             plutus_version=plutus_version,
+            handler_pair_ids=("handler",),
+            handler_references=(
+                {"handler_pair_id": "handler", "purpose": purpose},
+            ),
         )
 
     def test_validator_model_quantifies_every_applicable_input(self) -> None:
@@ -127,7 +142,7 @@ class SemanticContractTests(unittest.TestCase):
             self.assertIn("no single ledger purpose", ledger.unsupported_reason)
 
             v2_fallback = self._pair(root, "fallback", "v2")
-            self.assertFalse(raw_validator_input_model(v2_fallback).supported)
+            self.assertTrue(raw_validator_input_model(v2_fallback).supported)
             self.assertFalse(ledger_validator_input_model(v2_fallback).supported)
 
 

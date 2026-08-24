@@ -6,7 +6,7 @@ import stat
 from pathlib import Path
 from typing import Any
 
-from equiv_checker.models import BlasterConfig, BlasterResult, InputModel, ScriptPair, Timeouts
+from equiv_checker.models import BlasterConfig, BlasterResult, InputModel, ProgramPairRecord, Timeouts
 
 
 IDENTITY_HEX = "46010100200101"
@@ -134,8 +134,8 @@ class FakeBackend:
         self.replay_confirmed = replay_confirmed
         self.calls: list[str] = []
 
-    def compare(self, pair: ScriptPair, input_model: InputModel, output_root: Path) -> BlasterResult:
-        self.calls.append(pair.pair_id)
+    def compare(self, pair: ProgramPairRecord, input_model: InputModel, output_root: Path) -> BlasterResult:
+        self.calls.append(pair.program_pair_id)
         return BlasterResult(
             status=self.status,
             command=["fake-blaster"],
@@ -146,7 +146,7 @@ class FakeBackend:
 
     def replay(
         self,
-        pair: ScriptPair,
+        pair: ProgramPairRecord,
         input_model: InputModel,
         witness: dict[str, Any],
         output_root: Path,

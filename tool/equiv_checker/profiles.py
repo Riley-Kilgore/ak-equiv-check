@@ -178,18 +178,30 @@ def _validate_local_candidate(compiler: Compiler) -> None:
 def _semantic_statuses(
     bundle: Path, *, include_identical: bool = False
 ) -> list[str]:
-    value = json.loads((bundle / "pair-results.json").read_text(encoding="utf-8"))
-    return [
-        row["status"]
-        for row in value["records"]
-        if include_identical
-        or (
-            isinstance(row.get("old_script"), dict)
-            and isinstance(row.get("new_script"), dict)
-            and row["old_script"].get("sha256")
-            != row["new_script"].get("sha256")
+    value = json.loads(
+        (bundle / "pair-results.json").read_text(encoding="utf-8")
+    )
+    statuses: list[str] = []
+    for row in value["records"]:
+        old = row.get("old_program_artifact") or row.get("old_script")
+        new = row.get("new_program_artifact") or row.get("new_script")
+        old_hash = (
+            old.get("script_sha256", old.get("sha256"))
+            if isinstance(old, dict)
+            else None
         )
-    ]
+        new_hash = (
+            new.get("script_sha256", new.get("sha256"))
+            if isinstance(new, dict)
+            else None
+        )
+        if include_identical or (
+            isinstance(old_hash, str)
+            and isinstance(new_hash, str)
+            and old_hash != new_hash
+        ):
+            statuses.append(row["status"])
+    return statuses
 
 
 def profile_result(
@@ -285,16 +297,31 @@ def run_profile(
         )
         _validate_local_base(compilers[0])
         _validate_local_candidate(compilers[1])
-        summary = compare_sentinel(
-            REPOSITORY_ROOT / profile["fixture"],
-            compilers,
-            work_root=work_root,
-            strict=strict,
-            blaster_config=config,
-            feature_contract=REPOSITORY_ROOT / profile["feature_contract"],
-            resume=resume,
-            force=force,
-        )
+        feature_contract = profile.get("feature_contract")
+        if isinstance(feature_contract, str):
+            summary = compare_sentinel(
+                REPOSITORY_ROOT / profile["fixture"],
+                compilers,
+                work_root=work_root,
+                strict=strict,
+                blaster_config=config,
+                feature_contract=REPOSITORY_ROOT / feature_contract,
+                resume=resume,
+                force=force,
+            )
+        else:
+            summary = compare_package(
+                REPOSITORY_ROOT / profile["fixture"],
+                compilers,
+                work_root=work_root,
+                strict=strict,
+                blaster_config=config,
+                resume=resume,
+                force=force,
+                require_script_difference=bool(
+                    profile["require_script_difference"]
+                ),
+            )
 
     bundle = Path(summary["output"])
     semantic_statuses = _semantic_statuses(

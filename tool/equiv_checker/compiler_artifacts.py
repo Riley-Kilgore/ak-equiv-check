@@ -253,43 +253,238 @@ def _manifest_binary_path(manifest_path: Path, manifest: dict[str, Any]) -> Path
     return manifest_path.parent / value
 
 
-def verify_compiler_manifest(manifest_path: Path, *, expected_cache_key: str | None = None) -> dict[str, Any]:
+def verify_compiler_manifest(
+    manifest_path: Path,
+    *,
+    expected_cache_key: str | None = None,
+) -> dict[str, Any]:
     manifest_path = manifest_path.expanduser().resolve()
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
-        raise ValueError(f"failed to read compiler manifest {manifest_path}: {error}") from error
+        raise ValueError(
+            f"failed to read compiler manifest {manifest_path}: {error}"
+        ) from error
     if manifest.get("schema_version") != SCHEMA_VERSION:
-        raise ValueError(f"unsupported compiler manifest schema: {manifest.get('schema_version')}")
-    if expected_cache_key is not None and manifest.get("cache_key") != expected_cache_key:
-        raise ValueError("compiler artifact inputs no longer match the recorded cache key")
+        raise ValueError(
+            f"unsupported compiler manifest schema: {manifest.get('schema_version')}"
+        )
+    required_top_level = {
+        "artifact_kind",
+        "artifact_id",
+        "label",
+        "cache_key",
+        "source",
+        "toolchain",
+        "target",
+        "build",
+        "binary",
+        "reproducibility",
+    }
+    missing = sorted(required_top_level - manifest.keys())
+    if missing:
+        raise ValueError(
+            "compiler manifest is missing required fields: "
+            + ", ".join(missing)
+        )
+    if manifest["artifact_kind"] not in {"release", "local"}:
+        raise ValueError("compiler manifest has invalid artifact_kind")
+    for field_name in ("source", "toolchain", "target", "build", "binary"):
+        if not isinstance(manifest[field_name], dict):
+            raise ValueError(
+                f"compiler manifest field {field_name} must be an object"
+            )
+    source = manifest["source"]
+    required_source = {
+        "repository_url",
+        "commit_sha",
+        "source_tree_sha256",
+        "cargo_lock_sha256",
+        "required_rust_version",
+        "dirty",
+    }
+    if manifest["artifact_kind"] == "release":
+        required_source |= {
+            "ref",
+            "tag_object_sha",
+            "tag_target_type",
+            "source_tree_git_sha",
+        }
+    missing_source = sorted(required_source - source.keys())
+    if missing_source:
+        raise ValueError(
+            "compiler manifest source is missing required fields: "
+            + ", ".join(missing_source)
+        )
+    if manifest["build"].get("command") != list(BUILD_COMMAND):
+        raise RuntimeError("compiler manifest build command is not the locked class")
+    expected_identity = _build_identity(
+        kind=manifest["artifact_kind"],
+        source=source,
+        toolchain=manifest["toolchain"],
+        target=manifest["target"],
+    )
+    actual_cache_key = _stable_hash(expected_identity)
+    if manifest.get("cache_key") != actual_cache_key:
+        raise RuntimeError(
+            "compiler artifact inputs no longer match the recorded cache key"
+        )
+    if (
+        expected_cache_key is not None
+        and manifest.get("cache_key") != expected_cache_key
+    ):
+        raise ValueError(
+            "compiler artifact inputs no longer match the expected cache key"
+        )
     binary = _manifest_binary_path(manifest_path, manifest)
     if not binary.is_file():
-        raise FileNotFoundError(f"compiler artifact binary is missing: {binary}")
+        raise FileNotFoundError(
+            f"compiler artifact binary is missing: {binary}"
+        )
     actual_hash = sha256_file(binary)
-    expected_hash = manifest.get("binary", {}).get("sha256")
+    expected_hash = manifest["binary"].get("sha256")
     if actual_hash != expected_hash:
         raise RuntimeError(
             f"compiler artifact hash mismatch: expected {expected_hash}, got {actual_hash}"
         )
+    if manifest["binary"].get("size") != binary.stat().st_size:
+        raise RuntimeError("compiler artifact binary size mismatch")
     version = _checked([binary, "--version"], manifest_path.parent, timeout=30.0)
     reported = (version.stdout or version.stderr).strip().splitlines()[0]
-    if reported != manifest.get("binary", {}).get("reported_version"):
+    if reported != manifest["binary"].get("reported_version"):
         raise RuntimeError(
             "compiler artifact version mismatch: expected "
-            f"{manifest.get('binary', {}).get('reported_version')}, got {reported}"
+            f"{manifest['binary'].get('reported_version')}, got {reported}"
         )
     artifact_identity = {
-        "artifact_kind": manifest.get("artifact_kind"),
-        "source_tree_sha256": manifest.get("source", {}).get("source_tree_sha256"),
-        "commit_sha": manifest.get("source", {}).get("commit_sha"),
+        "artifact_kind": manifest["artifact_kind"],
+        "source_tree_sha256": source["source_tree_sha256"],
+        "commit_sha": source["commit_sha"],
         "binary_sha256": actual_hash,
-        "target": manifest.get("target"),
-        "build_command": manifest.get("build", {}).get("command"),
+        "target": manifest["target"],
+        "build_command": manifest["build"]["command"],
     }
-    if manifest.get("artifact_id") != _stable_hash(artifact_identity):
-        raise RuntimeError("compiler artifact identity does not match its recorded evidence")
+    if manifest["artifact_id"] != _stable_hash(artifact_identity):
+        raise RuntimeError(
+            "compiler artifact identity does not match its recorded evidence"
+        )
+    checkout = manifest_path.parent / "source"
+    if checkout.is_dir():
+        if _git(checkout, "rev-parse", "--verify", "HEAD^{commit}") != source[
+            "commit_sha"
+        ]:
+            raise RuntimeError("compiler source checkout commit mismatch")
+        tree = _git(checkout, "rev-parse", "HEAD^{tree}")
+        if source.get("source_tree_git_sha") not in {None, tree}:
+            raise RuntimeError("compiler source checkout Git tree mismatch")
+        records = _source_manifest(
+            checkout, excluded_paths=(manifest_path.parent,)
+        )
+        if _source_tree_sha256(records) != source["source_tree_sha256"]:
+            raise RuntimeError("compiler source checkout content mismatch")
+        if sha256_file(checkout / "Cargo.lock") != source[
+            "cargo_lock_sha256"
+        ]:
+            raise RuntimeError("compiler source checkout Cargo.lock mismatch")
+        if manifest["artifact_kind"] == "release":
+            tag_object = _git(
+                checkout,
+                "rev-parse",
+                "--verify",
+                f"refs/tags/{source['ref']}^{{tag}}",
+            )
+            if tag_object != source["tag_object_sha"]:
+                raise RuntimeError("compiler release tag object mismatch")
     return manifest
+
+
+def _canonical_repository_url(value: str) -> str:
+    normalized = value.strip().removesuffix("/").removesuffix(".git")
+    if normalized.startswith("git@github.com:"):
+        normalized = (
+            "https://github.com/" + normalized.removeprefix("git@github.com:")
+        )
+    return normalized.lower()
+
+
+def verify_release_lock(
+    manifest_path: Path,
+    release_lock_path: Path,
+) -> dict[str, Any]:
+    manifest = verify_compiler_manifest(manifest_path)
+    if manifest["artifact_kind"] != "release":
+        raise ValueError("base compiler manifest is not a release artifact")
+    release_lock_path = release_lock_path.expanduser().resolve()
+    try:
+        lock = json.loads(release_lock_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(
+            f"failed to read compiler release lock {release_lock_path}: {error}"
+        ) from error
+    if lock.get("schema_version") != 1:
+        raise ValueError(
+            f"unsupported compiler release lock schema: {lock.get('schema_version')}"
+        )
+    source = manifest["source"]
+    release = lock.get("releases", {}).get(source["ref"])
+    if not isinstance(release, dict):
+        raise ValueError(
+            f"compiler release {source['ref']} is absent from the complete release lock"
+        )
+    stable_actual = {
+        "canonical_upstream_repository": _canonical_repository_url(
+            source["repository_url"]
+        ),
+        "release_tag": source["ref"],
+        "annotated_tag_object": source["tag_object_sha"],
+        "tag_target_type": source["tag_target_type"],
+        "resolved_commit_sha": source["commit_sha"],
+        "git_tree_sha": source["source_tree_git_sha"],
+        "source_tree_sha256": source["source_tree_sha256"],
+        "cargo_lock_sha256": source["cargo_lock_sha256"],
+        "reported_aiken_version": manifest["binary"]["reported_version"],
+        "required_rust_version": source["required_rust_version"],
+        "build_command_class": manifest["build"]["command"],
+    }
+    stable_expected = release.get("stable")
+    if not isinstance(stable_expected, dict):
+        raise ValueError("compiler release lock has no stable field set")
+    for key, actual in stable_actual.items():
+        if stable_expected.get(key) != actual:
+            raise RuntimeError(
+                f"compiler release lock mismatch for {key}: "
+                f"expected {stable_expected.get(key)!r}, got {actual!r}"
+            )
+    target = manifest["target"]
+    platform_key = "-".join(
+        str(target.get(key)) for key in ("platform", "architecture", "target_triple")
+    )
+    platform_record = release.get("platform_artifacts", {}).get(platform_key)
+    if not isinstance(platform_record, dict):
+        raise RuntimeError(
+            f"compiler release lock has no artifact for platform {platform_key}"
+        )
+    platform_actual = {
+        "platform": target.get("platform"),
+        "architecture": target.get("architecture"),
+        "target_triple": target.get("target_triple"),
+        "binary_sha256": manifest["binary"]["sha256"],
+        "compiler_artifact_id": manifest["artifact_id"],
+    }
+    for key, actual in platform_actual.items():
+        if platform_record.get(key) != actual:
+            raise RuntimeError(
+                f"compiler platform release lock mismatch for {key}: "
+                f"expected {platform_record.get(key)!r}, got {actual!r}"
+            )
+    return {
+        "valid": True,
+        "release_lock": str(release_lock_path),
+        "release_lock_sha256": sha256_file(release_lock_path),
+        "release": source["ref"],
+        "stable": stable_actual,
+        "platform_artifact": platform_actual,
+    }
 
 
 def compiler_from_manifest(label: str, manifest_path: Path) -> Compiler:

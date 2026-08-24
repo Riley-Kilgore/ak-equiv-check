@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://equiv.local/schemas/validator-records.schema.json",
+  "type": "object",
+  "required": ["schema_version", "old", "new"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "old": {"$ref": "#/$defs/records"},
+    "new": {"$ref": "#/$defs/records"}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "records": {"type": "array", "items": {
+      "type": "object",
+      "required": ["validator_record_id", "repository", "package", "module", "validator", "handler_title", "purpose", "parameter_schemas", "datum_schema", "redeemer_schema", "blueprint_reference"],
+      "properties": {
+        "validator_record_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "repository": {"type": "string"}, "package": {"type": "string"},
+        "module": {"type": "string"}, "validator": {"type": "string"},
+        "handler_title": {"type": "string"}, "purpose": {"type": "string"},
+        "parameter_schemas": {"type": "array", "items": {"type": "object"}},
+        "datum_schema": {"type": ["object", "null"]},
+        "redeemer_schema": {"type": ["object", "null"]},
+        "blueprint_reference": {"type": "object"}
+      },
+      "additionalProperties": false
+    }}
+  }
+}

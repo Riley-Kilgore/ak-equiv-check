@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://equiv.local/schemas/validator-links.schema.json",
+  "type": "object",
+  "required": ["schema_version", "record_count", "records"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "record_count": {"type": "integer", "minimum": 0},
+    "records": {"type": "array", "items": {
+      "type": "object",
+      "required": ["handler_pair_id", "program_pair_id", "repository", "package", "module", "validator", "handler_title", "purpose", "parameter_schemas", "datum_schema", "redeemer_schema", "old_blueprint_reference", "new_blueprint_reference", "old_validator_record_id", "new_validator_record_id", "feature_ids", "logical_obligation_ids", "evidence_result_ids"],
+      "properties": {
+        "handler_pair_id": {"type": "string"},
+        "program_pair_id": {"type": ["string", "null"]},
+        "repository": {"type": "string"}, "package": {"type": "string"},
+        "module": {"type": "string"}, "validator": {"type": "string"},
+        "handler_title": {"type": "string"}, "purpose": {"type": "string"},
+        "parameter_schemas": {"type": "array", "items": {"type": "object"}},
+        "datum_schema": {"type": ["object", "null"]},
+        "redeemer_schema": {"type": ["object", "null"]},
+        "old_blueprint_reference": {"type": "object"},
+        "new_blueprint_reference": {"type": "object"},
+        "old_validator_record_id": {"type": "string"},
+        "new_validator_record_id": {"type": "string"},
+        "feature_ids": {"type": "array", "items": {"type": "string"}},
+        "logical_obligation_ids": {"type": "array", "items": {"type": "string"}},
+        "evidence_result_ids": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": false
+    }}
+  },
+  "additionalProperties": false
+}

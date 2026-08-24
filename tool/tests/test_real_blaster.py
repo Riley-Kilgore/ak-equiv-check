@@ -8,7 +8,7 @@ from pathlib import Path
 
 from equiv_checker.blaster import RealBlasterBackend
 from equiv_checker.config import load_blaster_config
-from equiv_checker.models import STRICT_PASSING_STATUSES, ScriptArtifact, ScriptPair
+from equiv_checker.models import STRICT_PASSING_STATUSES, ScriptArtifact, ProgramPairRecord
 from equiv_checker.semantics import pure_integer_input_model, validator_input_model
 
 
@@ -26,27 +26,43 @@ def _artifact(name: str) -> ScriptArtifact:
     )
 
 
-def _pair(pair_id: str, old: str, new: str) -> ScriptPair:
-    return ScriptPair(
-        pair_id=pair_id,
-        validator_identity={"blueprint_title": f"golden.{pair_id}"},
+def _pair(pair_id: str, old: str, new: str) -> ProgramPairRecord:
+    return ProgramPairRecord(
+        program_pair_id=pair_id,
         old_script=_artifact(old),
         new_script=_artifact(new),
-        purpose="pure",
-        parameters=(),
+        verified_abi_id="pure-abi",
+        verified_abi={
+            "status": "verified",
+            "top_level_callable_arity": 1,
+            "applied_parameter_count": 0,
+            "argument_order": ["input"],
+        },
         plutus_version="v3",
+        handler_pair_ids=("pure-handler",),
+        handler_references=(
+            {"handler_pair_id": "pure-handler", "purpose": "pure"},
+        ),
     )
 
 
-def _validator_pair(pair_id: str, old: str, new: str) -> ScriptPair:
-    return ScriptPair(
-        pair_id=pair_id,
-        validator_identity={"blueprint_title": f"golden.{pair_id}.spend"},
+def _validator_pair(pair_id: str, old: str, new: str) -> ProgramPairRecord:
+    return ProgramPairRecord(
+        program_pair_id=pair_id,
         old_script=_artifact(old),
         new_script=_artifact(new),
-        purpose="spending",
-        parameters=({"title": "parameter", "schema": {}},),
+        verified_abi_id="validator-abi",
+        verified_abi={
+            "status": "verified",
+            "top_level_callable_arity": 2,
+            "applied_parameter_count": 1,
+            "argument_order": ["parameter0", "script_context_data"],
+        },
         plutus_version="v3",
+        handler_pair_ids=("validator-handler",),
+        handler_references=(
+            {"handler_pair_id": "validator-handler", "purpose": "spending"},
+        ),
     )
 
 
@@ -124,7 +140,7 @@ class RealBlasterGoldenTests(unittest.TestCase):
             model = pure_integer_input_model()
             result = backend.compare(pair, model, output)
             self.assertEqual(result.status, "blaster_falsified_unreplayed")
-            self.assertIsNone(result.witness)
+            self.assertIsNotNone(result.witness)
             self.assertNotIn(result.status, STRICT_PASSING_STATUSES)
 
     def test_falsification_is_replayed_by_the_actual_cek_evaluator(self) -> None:
@@ -139,7 +155,10 @@ class RealBlasterGoldenTests(unittest.TestCase):
                 pair, pure_integer_input_model(), result.witness, output
             )
             self.assertTrue(replay["confirmed"])
-            self.assertNotEqual(replay["old_observation"], replay["new_observation"])
+            self.assertNotEqual(
+                replay["primary_evaluator"]["old_observation"],
+                replay["primary_evaluator"]["new_observation"],
+            )
             self.assertTrue((output / replay["artifact_path"]).is_file())
             self.assertNotIn("confirmed_non_equivalent", STRICT_PASSING_STATUSES)
 
@@ -154,11 +173,17 @@ class RealBlasterGoldenTests(unittest.TestCase):
             model = validator_input_model(pair)
             result = self.backend.compare(pair, model, output)
             self.assertEqual(result.status, "blaster_falsified_unreplayed")
-            self.assertTrue(result.witness["raw_available"])
+            self.assertEqual(
+                result.witness["protocol_version"], "EQUIV_WITNESS_V2"
+            )
             replay = self.backend.replay(pair, model, result.witness, output)
             self.assertTrue(replay["confirmed"])
-            self.assertEqual(replay["old_observation"], "success")
-            self.assertEqual(replay["new_observation"], "failure")
+            self.assertEqual(
+                replay["primary_evaluator"]["old_observation"], "success"
+            )
+            self.assertEqual(
+                replay["primary_evaluator"]["new_observation"], "failure"
+            )
 
 
 if __name__ == "__main__":

@@ -481,6 +481,72 @@ def _run_lane_compiler(
     }
 
 
+def _materialize_dependency_lock(
+    package: Path,
+    compiler: Compiler,
+    task_root: Path,
+    timeout: float,
+) -> dict[str, Any]:
+    lock_path = package / "aiken.lock"
+    if lock_path.is_file():
+        return {
+            "status": "already_locked",
+            "compiler": compiler.identity(),
+            "dependency_lock_sha256": sha256_file(lock_path),
+            "command": None,
+            "exit_code": None,
+            "timed_out": False,
+        }
+    materialization_root = task_root / "dependency-materialization"
+    compiler_package = materialization_root / "package"
+    if materialization_root.exists():
+        shutil.rmtree(materialization_root)
+    compiler_package.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(package, compiler_package)
+    command = [str(compiler.executable), "check"]
+    process = run_process(
+        command,
+        compiler_package,
+        timeout,
+        inherit_environment=False,
+    )
+    logs = materialization_root / "logs"
+    stdout_path = logs / "stdout.log"
+    stderr_path = logs / "stderr.log"
+    write_process_logs(process, stdout_path, stderr_path)
+    generated_lock = compiler_package / "aiken.lock"
+    status = (
+        "materialized"
+        if process.exit_code == 0
+        and not process.timed_out
+        and generated_lock.is_file()
+        else "materialization_failed"
+    )
+    lock_sha256 = (
+        sha256_file(generated_lock)
+        if status == "materialized"
+        else None
+    )
+    if status == "materialized":
+        shutil.copy2(generated_lock, lock_path)
+    return {
+        "status": status,
+        "compiler": compiler.identity(),
+        "dependency_lock_sha256": lock_sha256,
+        "command": command,
+        "exit_code": process.exit_code,
+        "timed_out": process.timed_out,
+        "duration_seconds": process.duration_seconds,
+        "stdout_path": stdout_path.relative_to(task_root).as_posix(),
+        "stderr_path": stderr_path.relative_to(task_root).as_posix(),
+        "stdout_sha256": sha256_file(stdout_path),
+        "stderr_sha256": sha256_file(stderr_path),
+        "process_group_termination_succeeded": (
+            process.process_group_termination_succeeded
+        ),
+    }
+
+
 def _direct_lane_classification(
     task: dict[str, Any], old: dict[str, Any], new: dict[str, Any]
 ) -> tuple[str, bool]:
@@ -552,8 +618,24 @@ def _equivalence_lane(
     evaluated_rows = [
         row
         for row in pair_data["records"]
-        if not only_pairs or row["pair_id"] in only_pairs
+        if not only_pairs or row["program_pair_id"] in only_pairs
     ]
+    if (
+        not task["equivalence_required"]
+        and not evaluated_rows
+        and summary["counts"]["validator_records_old"] == 0
+        and summary["counts"]["validator_records_new"] == 0
+        and old_result["primary_exit_code"] == 0
+        and new_result["primary_exit_code"] == 0
+    ):
+        return {
+            "classification": "not_applicable",
+            "strict_pass": True,
+            "old_result": old_result,
+            "new_result": new_result,
+            "semantic_summary": summary,
+        }
+
     lane_strict_pass = (
         not summary["gaps"]
         and bool(evaluated_rows)
@@ -655,6 +737,28 @@ def _execute_task(
         }
         write_json(task_root / "result.json", result)
         return result
+
+    if task["lane"] == "equivalence":
+        materialization = _materialize_dependency_lock(
+            package,
+            compilers[0],
+            task_root,
+            float(task["timeout_seconds"] or config.timeouts.aiken_build),
+        )
+        base["dependency_materialization"] = materialization
+        if materialization["status"] == "materialization_failed":
+            result = base | {
+                "classification": "dependency_materialization_failed",
+                "strict_pass": False,
+                "old_result": None,
+                "new_result": None,
+            }
+            write_json(task_root / "result.json", result)
+            return result
+        effective_lock_hash = materialization["dependency_lock_sha256"]
+        base["dependency_lock_hash"] = effective_lock_hash
+        source_identity_fields["dependency_lock_hash"] = effective_lock_hash
+        source_identity["identity"] = _hash_json(source_identity_fields)
 
     source_before = hash_package_tree(checkout / task["package_subpath"], include_lock=True)
     if task["lane"] == "equivalence":
@@ -870,10 +974,10 @@ def run_corpus(
                 continue
             aggregate = json.loads(aggregate_path.read_text(encoding="utf-8"))
             for row in aggregate.get("records", []):
-                if row.get("pair_id") in requested_pairs:
+                if row.get("program_pair_id") in requested_pairs:
                     selected_pair_results.append(row)
                     matched_task_ids.add(task["task_id"])
-        found_pairs = {row["pair_id"] for row in selected_pair_results}
+        found_pairs = {row["program_pair_id"] for row in selected_pair_results}
         missing_pairs = sorted(requested_pairs - found_pairs)
         if missing_pairs:
             raise ValueError(
@@ -956,11 +1060,11 @@ def run_corpus(
             selected_pair_results.extend(
                 row
                 for row in aggregate.get("records", [])
-                if row.get("pair_id") in requested_pairs
+                if row.get("program_pair_id") in requested_pairs
             )
         missing_pairs = sorted(
             requested_pairs
-            - {row["pair_id"] for row in selected_pair_results}
+            - {row["program_pair_id"] for row in selected_pair_results}
         )
         if missing_pairs:
             raise ValueError(

@@ -12,6 +12,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
+from .evidence import GENERATED_LEAN_SCHEMA_VERSION
 from .blaster import RealBlasterBackend
 from .blueprints import inspect_blueprint
 from .census import census, ensure_shim, inspect_uplc
@@ -33,8 +34,11 @@ from .models import (
     FINAL_STATUSES,
     STRICT_PASSING_STATUSES,
     BlasterResult,
+    FeatureEvidenceLink,
+    HandlerPairRecord,
     InputModel,
-    ScriptPair,
+    ProgramPairRecord,
+    SemanticObligationRecord,
 )
 from .pairing import PairingResult, canonical_json, pair_validators, stable_hash
 from .pipeline import _capture_negative_cases, prove_reachability, run_lanes
@@ -195,9 +199,16 @@ def source_repository_metadata(
         }
     repository_root = Path(root_result.stdout.strip()).resolve()
     commit_result = _git(package, "rev-parse", "HEAD")
-    status_result = _git(package, "status", "--porcelain", "--untracked-files=normal")
     remote_result = _git(package, "config", "--get", "remote.origin.url")
     relative = package.resolve().relative_to(repository_root).as_posix() or "."
+    status_result = _git(
+        repository_root,
+        "status",
+        "--porcelain",
+        "--untracked-files=normal",
+        "--",
+        relative,
+    )
     commit = commit_result.stdout.strip() if commit_result.exit_code == 0 else None
     remote = remote_result.stdout.strip() if remote_result.exit_code == 0 else None
     canonical_remote = remote or "local-git"
@@ -557,8 +568,19 @@ def _build_failure_results(
     return results
 
 
+def _row_checksum(row: dict[str, Any]) -> str:
+    return stable_hash(
+        {key: value for key, value in row.items() if key != "artifact_checksum"}
+    )
+
+
+def _seal_evidence_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["artifact_checksum"] = _row_checksum(row)
+    return row
+
+
 def _pair_result(
-    pair: ScriptPair,
+    pair: ProgramPairRecord,
     input_model: InputModel,
     status: str,
     backend_result: BlasterResult | None,
@@ -571,54 +593,70 @@ def _pair_result(
     if status not in FINAL_STATUSES:
         raise ValueError(f"unknown pair result status: {status}")
     backend = backend_result.to_dict() if backend_result else {}
-    evidence_fields = {
-        "script_pair_identity": pair.pair_id,
-        "old_script_hash": pair.old_script.sha256,
-        "new_script_hash": pair.new_script.sha256,
-        "input_model_version": input_model.profile,
-        "domain_hash": stable_hash(input_model.domain_expression),
-        "observation_hash": stable_hash(input_model.observation),
-        "blaster_revisions": dict(sorted(config.revisions.items())),
-        "lean_version": config.lean_version,
-        "z3_version": config.z3_version,
-        "runtime_step_bound": config.runtime_step_bound,
+    model_id = input_model.semantic_model_id(config.runtime_step_bound)
+    obligation_kind = (
+        "ledger_observational_equivalence"
+        if input_model.profile.startswith("ledger-valid")
+        else "observational_equivalence"
+    )
+    equivalence_obligation = SemanticObligationRecord.create(
+        pair,
+        input_model,
+        obligation_kind,
+        config.runtime_step_bound,
+    )
+    checker = config.checker_configuration()
+    cache_binding = {
+        "logical_obligation_id": equivalence_obligation.logical_obligation_id,
+        "checker_configuration_id": checker["checker_configuration_id"],
+        "old_script_sha256": pair.old_script.sha256,
+        "new_script_sha256": pair.new_script.sha256,
+        "old_program_artifact_id": pair.old_script.program_artifact_id,
+        "new_program_artifact_id": pair.new_script.program_artifact_id,
+        "verified_abi_id": pair.verified_abi_id,
+        "semantic_model_id": model_id,
+        "generated_source_schema_version": GENERATED_LEAN_SCHEMA_VERSION,
     }
-    evidence_id = stable_hash(evidence_fields)
-    attempt_fields = {
-        "evidence_id": evidence_id,
-        "timeouts": asdict(config.timeouts),
-        "runner_schema_version": CHECKER_SCHEMA_VERSION,
-        "execution_environment": platform_key(),
-        "attempt_sequence": attempt_sequence,
-    }
+    evidence_id = stable_hash(
+        cache_binding
+        | {
+            "solver_status": status,
+            "generated_lean_sha256": backend.get("generated_lean_sha256"),
+        }
+    )
     return {
-        "pair_id": pair.pair_id,
+        "program_pair_id": pair.program_pair_id,
         "evidence_id": evidence_id,
-        "evidence_identity": evidence_fields,
-        "attempt_id": stable_hash(attempt_fields),
+        "cache_binding": cache_binding,
+        "attempt_id": equivalence_obligation.attempt_id(
+            config, attempt_sequence
+        ),
         "attempt_sequence": attempt_sequence,
         "execution_environment": platform_key(),
         "source_identity": source,
-        "validator_identity": pair.validator_identity,
+        "handler_pair_ids": list(pair.handler_pair_ids),
+        "handler_references": list(pair.handler_references),
         "compiler_pair": compilers,
-        "old_script": pair.old_script.to_dict(),
-        "new_script": pair.new_script.to_dict(),
-        "purpose": pair.purpose,
-        "parameters": list(pair.parameters),
+        "old_program_artifact": pair.old_script.to_dict(),
+        "new_program_artifact": pair.new_script.to_dict(),
+        "verified_abi_id": pair.verified_abi_id,
+        "verified_abi": pair.verified_abi,
         "covered_feature_ids": list(pair.covered_feature_ids),
-        "abi": pair.abi,
+        "semantic_model_id": model_id,
         "input_model": input_model.to_dict(),
         "domain_assumptions": list(input_model.domain_assumptions),
         "semantic_contract": EQUIVALENCE_FORMULA,
         "excluded_observations": list(EXCLUDED_FROM_SEMANTIC_VERDICT),
-        "blaster_dependencies": dict(config.revisions),
-        "lean_version": config.lean_version,
-        "z3_version": config.z3_version,
-        "solver": config.solver,
+        "checker_configuration": checker,
         "runtime_step_bound": config.runtime_step_bound,
-        "fuel_semantics": "maximum CEK transitions per modeled input; preparation timeouts are separate and inconclusive",
+        "fuel_semantics": "maximum CEK transitions per modeled input; process timeouts are execution evidence",
         "timeouts": asdict(config.timeouts),
         "evaluator": config.evaluator.identity() if config.evaluator else None,
+        "secondary_evaluator": (
+            config.secondary_evaluator.identity()
+            if config.secondary_evaluator
+            else None
+        ),
         "status": status,
         "command": backend.get("command"),
         "exit_code": backend.get("exit_code"),
@@ -633,6 +671,7 @@ def _pair_result(
         "phase_results": backend.get("phase_results", []),
         "proof_obligations": backend.get("proof_obligations", {}),
         "counterexample_replay": None,
+        "evidence_reuse": None,
         "error": backend.get("error"),
         "cost_and_trace": {
             "included_in_semantic_verdict": False,
@@ -762,6 +801,7 @@ def _feature_coverage(
     sentinel_evidence: dict[str, Any] | None,
     pair_results: list[dict[str, Any]],
     builds: dict[str, dict[str, Any]],
+    obligation_results: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     if manifest is None:
         return {
@@ -791,21 +831,31 @@ def _feature_coverage(
         )
         for row in values
     }
-    source_ids = {row["feature_id"] for row in sentinel_evidence["census"]}
+    source_ids = {
+        row["feature_id"] for row in sentinel_evidence["census"]
+    }
     reachability = {
         label: {row["feature_id"]: row for row in rows}
         for label, rows in sentinel_evidence["reachability"].items()
     }
-    pair_by_feature = {
-        feature_id: result
-        for result in pair_results
-        for feature_id in result.get("covered_feature_ids", [])
-    }
+    pair_by_feature: dict[str, list[dict[str, Any]]] = {}
+    for result in pair_results:
+        if not isinstance(result.get("program_pair_id"), str):
+            continue
+        for feature_id in result.get("covered_feature_ids", []):
+            pair_by_feature.setdefault(feature_id, []).append(result)
     negative = {
-        label: {row["feature_id"]: row for row in builds[label]["negative_runs"]}
+        label: {
+            row["feature_id"]: row
+            for row in builds[label]["negative_runs"]
+        }
         for label in ("old", "new")
     }
     lane_runs = sentinel_evidence["lanes"]
+    obligation_result_ids = {
+        row["logical_obligation_id"]: row["evidence_result_id"]
+        for row in (obligation_results or [])
+    }
 
     def lane_results(label: str, lanes: list[str]) -> dict[str, bool]:
         results: dict[str, bool] = {}
@@ -814,112 +864,188 @@ def _feature_coverage(
                 continue
             record = lane_runs[label].get(lane)
             results[lane] = bool(
-                record and record.get("required") and record.get("exit_code") == 0
+                record
+                and record.get("required")
+                and record.get("exit_code") == 0
             )
         return results
 
+    def pair_state(status: str) -> str:
+        if status == "identical":
+            return "pair_identical"
+        if status in {
+            "equivalent_under_raw_model",
+            "equivalent_under_ledger_model",
+        }:
+            return "pair_complete_equivalent"
+        if status == "bounded_equivalent":
+            return "pair_bounded_equivalent"
+        if status in {
+            "confirmed_non_equivalent",
+            "off_ledger_difference",
+            "blaster_falsified_unreplayed",
+        }:
+            return "pair_confirmed_non_equivalent"
+        if status in {
+            "blaster_unsupported",
+            "raw_model_unsupported",
+            "ledger_model_unsupported",
+            "fallback_purpose_unsupported",
+            "raw_model_not_bound_to_abi",
+        }:
+            return "pair_unsupported"
+        return "pair_inconclusive"
+
+    def aggregate_pair_state(rows: list[dict[str, Any]]) -> str:
+        if not rows:
+            return "pair_missing"
+        states = {pair_state(row["status"]) for row in rows}
+        for state in (
+            "pair_confirmed_non_equivalent",
+            "pair_bounded_equivalent",
+            "pair_unsupported",
+            "pair_inconclusive",
+            "pair_missing",
+        ):
+            if state in states:
+                return state
+        if "pair_complete_equivalent" in states:
+            return "pair_complete_equivalent"
+        return "pair_identical"
+
     records: list[dict[str, Any]] = []
-    for feature_id, contract_row in sorted(contract_rows.items()):
-        kind = contract_row["row_kind"]
+    all_feature_ids = sorted(set(contract_rows) | set(manifest_rows))
+    for feature_id in all_feature_ids:
+        contract_row = contract_rows.get(feature_id)
         manifest_row = manifest_rows.get(feature_id)
-        manifest_present = manifest_row is not None
-        lanes = contract_row.get("lanes", [])
-        source_present = feature_id in source_ids
+        kind = (
+            contract_row or manifest_row or {"row_kind": "feature"}
+        )["row_kind"]
+        lanes = list((contract_row or {}).get("lanes", []))
+        linked_pairs = pair_by_feature.get(feature_id, [])
         old_build = builds["old"]["primary_exit_code"] == 0
         new_build = builds["new"]["primary_exit_code"] == 0
-        reachability_required = bool(
-            manifest_row.get("reachability_required", "blaster" in lanes)
-            if manifest_row
-            else "blaster" in lanes
-        )
         old_reach = reachability["old"].get(feature_id)
         new_reach = reachability["new"].get(feature_id)
-        reachability_pass = not reachability_required or bool(
-            old_reach and old_reach["pass"] and new_reach and new_reach["pass"]
+        reachability_required = bool(
+            (manifest_row or {}).get(
+                "reachability_required", "blaster" in lanes
+            )
         )
         old_lane_results = lane_results("old", lanes)
         new_lane_results = lane_results("new", lanes)
-        non_blaster_lanes_pass = all(
-            [*old_lane_results.values(), *new_lane_results.values()]
-        )
-        pair_result = pair_by_feature.get(feature_id)
+        pair_aggregate = aggregate_pair_state(linked_pairs)
         if not old_build:
             status = "old_build_failed"
         elif not new_build:
             status = "new_build_failed"
-        elif not manifest_present:
-            status = "feature_not_shared"
-        elif contract_row.get("negative_compile_case"):
+        elif contract_row is None:
+            status = "feature_new_only"
+        elif manifest_row is None:
+            status = "pair_missing"
+        elif old_reach is None and new_reach is not None:
+            status = "feature_new_only"
+        elif new_reach is None and old_reach is not None:
+            status = "feature_old_only"
+        elif reachability_required and not (
+            old_reach and old_reach.get("pass")
+        ):
+            status = "old_reachability_failed"
+        elif reachability_required and not (
+            new_reach and new_reach.get("pass")
+        ):
+            status = "new_reachability_failed"
+        elif (contract_row or {}).get("negative_compile_case"):
             old_negative = negative["old"].get(feature_id)
             new_negative = negative["new"].get(feature_id)
             status = (
                 "expected_negative_diagnostic"
                 if old_negative
-                and old_negative["pass"]
+                and old_negative.get("pass")
                 and new_negative
-                and new_negative["pass"]
-                else "feature_not_shared"
+                and new_negative.get("pass")
+                else "pair_inconclusive"
             )
         elif "blaster" in lanes:
-            if not source_present or not reachability_pass or pair_result is None:
-                status = "feature_not_shared"
-            else:
-                status = pair_result["status"]
+            status = pair_aggregate
         else:
             status = (
                 "not_applicable"
-                if source_present and non_blaster_lanes_pass
-                else "feature_not_shared"
+                if feature_id in source_ids
+                and all(
+                    [
+                        *old_lane_results.values(),
+                        *new_lane_results.values(),
+                    ]
+                )
+                else "pair_inconclusive"
             )
+        logical_ids = sorted(
+            {
+                obligation["logical_obligation_id"]
+                for pair_row in linked_pairs
+                for model in pair_row.get("model_results", {}).values()
+                for obligation in model.get(
+                    "semantic_obligations", []
+                )
+            }
+        )
+        authoritative = sorted(
+            {
+                obligation_result_ids[logical_id]
+                for logical_id in logical_ids
+                if logical_id in obligation_result_ids
+            }
+        )
         records.append(
             {
                 "feature_id": feature_id,
                 "row_kind": kind,
                 "lanes": lanes,
-                "manifest_present": manifest_present,
-                "source_present": source_present,
+                "manifest_present": manifest_row is not None,
+                "source_present": feature_id in source_ids,
                 "old_build_accepted": old_build,
                 "new_build_accepted": new_build,
                 "lane_results_old": old_lane_results,
                 "lane_results_new": new_lane_results,
-                "uplc_generated_old": bool(old_reach)
-                if reachability_required
-                else None,
-                "uplc_generated_new": bool(new_reach)
-                if reachability_required
-                else None,
                 "reachability_required": reachability_required,
-                "reachability_pass": reachability_pass,
-                "pair_id": pair_result["pair_id"] if pair_result else None,
-                "pair_status": pair_result["status"] if pair_result else None,
+                "old_reachability": old_reach,
+                "new_reachability": new_reach,
+                "handler_pair_ids": sorted(
+                    {
+                        handler_id
+                        for row in linked_pairs
+                        for handler_id in row.get(
+                            "handler_pair_ids", []
+                        )
+                    }
+                ),
+                "program_pair_ids": sorted(
+                    {
+                        row["program_pair_id"]
+                        for row in linked_pairs
+                    }
+                ),
+                "semantic_obligation_ids": logical_ids,
+                "all_linked_evidence": authoritative,
+                "required_evidence": authoritative
+                if "blaster" in lanes
+                else [],
+                "authoritative_evidence": authoritative,
+                "pair_results": [
+                    {
+                        "program_pair_id": row[
+                            "program_pair_id"
+                        ],
+                        "evidence_id": row["evidence_id"],
+                        "state": pair_state(row["status"]),
+                    }
+                    for row in linked_pairs
+                ],
+                "aggregate_feature_result": status,
                 "status": status,
             }
         )
-    for feature_id, manifest_row in sorted(manifest_rows.items()):
-        if feature_id in contract_rows:
-            continue
-        source_present = feature_id in source_ids
-        records.append(
-            {
-                "feature_id": feature_id,
-                "row_kind": manifest_row["row_kind"],
-                "lanes": [],
-                "manifest_present": True,
-                "source_present": source_present,
-                "old_build_accepted": builds["old"]["primary_exit_code"] == 0,
-                "new_build_accepted": builds["new"]["primary_exit_code"] == 0,
-                "lane_results_old": {},
-                "lane_results_new": {},
-                "uplc_generated_old": None,
-                "uplc_generated_new": None,
-                "reachability_required": False,
-                "reachability_pass": False,
-                "pair_id": None,
-                "pair_status": None,
-                "status": "feature_not_shared",
-            }
-        )
-    records.sort(key=lambda row: (row["row_kind"], row["feature_id"]))
     return {
         "schema_version": CHECKER_SCHEMA_VERSION,
         "mode": "sentinel",
@@ -928,9 +1054,35 @@ def _feature_coverage(
     }
 
 
+def _compact_feature_links(
+    feature_coverage: dict[str, Any],
+) -> dict[str, Any]:
+    records = [
+        {
+            "feature_id": row["feature_id"],
+            "row_kind": row["row_kind"],
+            "status": row["status"],
+            "handler_pair_ids": row["handler_pair_ids"],
+            "program_pair_ids": row["program_pair_ids"],
+            "semantic_obligation_ids": row[
+                "semantic_obligation_ids"
+            ],
+            "all_linked_evidence": row["all_linked_evidence"],
+            "required_evidence": row["required_evidence"],
+            "authoritative_evidence": row[
+                "authoritative_evidence"
+            ],
+        }
+        for row in feature_coverage["records"]
+    ]
+    return {
+        "schema_version": CHECKER_SCHEMA_VERSION,
+        "record_count": len(records),
+        "records": records,
+    }
+
+
 def _load_valid_pair_results(bundle_root: Path) -> dict[str, dict[str, Any]]:
-    schema = load_json(TOOL_ROOT / "schemas" / "pair-results.schema.json")
-    validator = Draft202012Validator(schema)
     results: dict[str, dict[str, Any]] = {}
     pairs_root = bundle_root / "pairs"
     if not pairs_root.is_dir():
@@ -940,15 +1092,39 @@ def _load_valid_pair_results(bundle_root: Path) -> dict[str, dict[str, Any]]:
             row = load_json(result_path)
         except (OSError, json.JSONDecodeError):
             continue
-        wrapper = {
-            "schema_version": CHECKER_SCHEMA_VERSION,
-            "record_count": 1,
-            "records": [row],
-        }
-        if any(validator.iter_errors(wrapper)):
+        if (
+            not isinstance(row, dict)
+            or row.get("artifact_checksum") != _row_checksum(row)
+        ):
             continue
-        pair_id = row.get("pair_id")
-        if isinstance(pair_id, str) and result_path.parent.name == pair_id:
+        pair_id = row.get("program_pair_id")
+        if not isinstance(pair_id, str) or result_path.parent.name != pair_id:
+            continue
+        generated_valid = True
+
+        def validate_generated(value: Any) -> None:
+            nonlocal generated_valid
+            if not generated_valid:
+                return
+            if isinstance(value, dict):
+                path = value.get("generated_lean_path")
+                checksum = value.get("generated_lean_sha256")
+                if path is not None or checksum is not None:
+                    if not isinstance(path, str) or not isinstance(checksum, str):
+                        generated_valid = False
+                        return
+                    source = bundle_root / path
+                    if not source.is_file() or sha256_file(source) != checksum:
+                        generated_valid = False
+                        return
+                for nested in value.values():
+                    validate_generated(nested)
+            elif isinstance(value, list):
+                for nested in value:
+                    validate_generated(nested)
+
+        validate_generated(row)
+        if generated_valid:
             results[pair_id] = row
     return results
 
@@ -988,46 +1164,147 @@ def _replay_counterexample(
     backend: BlasterBackend,
     config: BlasterConfig,
     compilers: dict[str, dict[str, Any]],
-    pair: ScriptPair,
+    pair: ProgramPairRecord,
     input_model: InputModel,
     witness: dict[str, Any],
     bundle_root: Path,
 ) -> dict[str, Any]:
-    evaluator = config.evaluator
-    if evaluator is not None and evaluator.binary_sha256 in {
+    evaluators = tuple(
+        evaluator
+        for evaluator in (
+            config.evaluator,
+            config.secondary_evaluator,
+        )
+        if evaluator is not None
+    )
+    compiler_hashes = {
         compiler.get("binary_sha256") for compiler in compilers.values()
-    }:
+    }
+    collision = next(
+        (
+            evaluator
+            for evaluator in evaluators
+            if evaluator.binary_sha256 in compiler_hashes
+        ),
+        None,
+    )
+    if collision is not None:
         return {
             "confirmed": False,
-            "reason": "independent replay evaluator must not be either compared compiler binary",
-            "evaluator": evaluator.identity(),
+            "reason": "replay evaluator must be a separate binary from both compared compilers",
+            "evaluator": collision.identity(),
         }
-    return backend.replay(pair, input_model, witness, bundle_root)
+    replay = backend.replay(pair, input_model, witness, bundle_root)
+    trust = replay.get("replay_trust")
+    if isinstance(trust, dict):
+        trust["separate_binary"] = bool(evaluators)
+    replay["source_relationships"] = {
+        "old_compiler_source": compilers.get("old", {}).get(
+            "provenance", {}
+        ).get("source", compilers.get("old", {}).get("git_revision")),
+        "new_compiler_source": compilers.get("new", {}).get(
+            "provenance", {}
+        ).get("source", compilers.get("new", {}).get("git_revision")),
+        "replay_evaluator_sources": [
+            {
+                "name": evaluator.name,
+                "revision": evaluator.revision,
+                "binary_sha256": evaluator.binary_sha256,
+                "distinct_uplc_implementation": (
+                    evaluator.distinct_uplc_implementation
+                ),
+            }
+            for evaluator in evaluators
+        ],
+        "symbolic_checker_source": config.checker_configuration(),
+    }
+    return replay
+
+
+def _planned_logical_obligation_ids(
+    pair: ProgramPairRecord,
+    config: BlasterConfig,
+) -> list[str]:
+    raw_model, ledger_models = validator_input_models(pair)
+    identifiers: set[str] = set()
+    for model in (raw_model, *ledger_models):
+        kinds = (
+            (
+                "ledger_domain_non_vacuity",
+                "old_program_completion",
+                "new_program_completion",
+                "ledger_observational_equivalence",
+            )
+            if model.profile.startswith("ledger-valid")
+            else (
+                "domain_non_vacuity",
+                "old_program_completion",
+                "new_program_completion",
+                "observational_equivalence",
+            )
+        )
+        identifiers.update(
+            SemanticObligationRecord.create(
+                pair,
+                model,
+                kind,
+                config.runtime_step_bound,
+            ).logical_obligation_id
+            for kind in kinds
+        )
+    return sorted(identifiers)
+
+
+def _planned_semantic_model_ids(
+    pair: ProgramPairRecord,
+    config: BlasterConfig,
+) -> list[str]:
+    raw_model, ledger_models = validator_input_models(pair)
+    return sorted(
+        model.semantic_model_id(config.runtime_step_bound)
+        for model in (raw_model, *ledger_models)
+    )
 
 
 def _cached_pair_matches(
     row: dict[str, Any] | None,
-    pair: ScriptPair,
+    pair: ProgramPairRecord,
     input_model: InputModel,
     source: dict[str, Any],
     compilers: dict[str, dict[str, Any]],
     config: BlasterConfig,
 ) -> bool:
-    if row is None:
+    del source, compilers
+    if (
+        row is None
+        or row.get("artifact_checksum") != _row_checksum(row)
+        or row.get("program_pair_id") != pair.program_pair_id
+    ):
         return False
     expected = _pair_result(
         pair,
         input_model,
         "identical",
         None,
-        source=source,
-        compilers=compilers,
+        source={},
+        compilers={},
         config=config,
     )
+    cached_binding = dict(row.get("cache_binding", {}))
+    cached_obligations = cached_binding.pop(
+        "logical_obligation_ids", None
+    )
+    cached_models = cached_binding.pop("semantic_model_ids", None)
+    expected_obligations = (
+        []
+        if row.get("status")
+        in {"identical", "expected_codegen_delta_not_observed"}
+        else _planned_logical_obligation_ids(pair, config)
+    )
     return (
-        row.get("pair_id") == pair.pair_id
-        and row.get("evidence_id") == expected["evidence_id"]
-        and row.get("evidence_identity") == expected["evidence_identity"]
+        cached_binding == expected["cache_binding"]
+        and cached_models == _planned_semantic_model_ids(pair, config)
+        and cached_obligations == expected_obligations
         and row.get("status") in FINAL_STATUSES
     )
 
@@ -1037,9 +1314,15 @@ def _validate_bundle(bundle_root: Path) -> list[str]:
         "run.json": "run.schema.json",
         "build-old.json": "build-v2.schema.json",
         "build-new.json": "build-v2.schema.json",
-        "script-pairs.json": "script-pairs.schema.json",
+        "validator-records.json": "validator-records.schema.json",
+        "handler-pairs.json": "handler-pairs.schema.json",
+        "program-pairs.json": "program-pairs.schema.json",
         "pair-results.json": "pair-results.schema.json",
+        "semantic-obligations.json": "semantic-obligations.schema.json",
+        "obligation-results.json": "obligation-results.schema.json",
+        "validator-links.json": "validator-links.schema.json",
         "feature-coverage.json": "feature-coverage.schema.json",
+        "feature-links.json": "feature-links.schema.json",
         "summary.json": "summary-v2.schema.json",
     }
     errors: list[str] = []
@@ -1065,8 +1348,9 @@ def _validate_bundle(bundle_root: Path) -> list[str]:
         try:
             aggregate = load_json(pair_results_path)
             for row in aggregate.get("records", []):
-                pair_id = row.get("pair_id")
+                pair_id = row.get("program_pair_id")
                 if not isinstance(pair_id, str):
+                    errors.append("program result missing program_pair_id")
                     continue
                 individual_path = bundle_root / "pairs" / pair_id / "result.json"
                 if not individual_path.is_file():
@@ -1081,16 +1365,48 @@ def _validate_bundle(bundle_root: Path) -> list[str]:
 def _summary_markdown(summary: dict[str, Any]) -> str:
     counts = summary["counts"]
     labels = (
-        ("Validators discovered", counts["validators_discovered"]),
-        ("Validators paired", counts["validators_paired"]),
-        ("Identical pairs", counts["identical_pairs"]),
-        ("Blaster-valid pairs", counts["blaster_valid_pairs"]),
-        ("Confirmed differences", counts["confirmed_differences"]),
-        ("Unreplayed falsifications", counts["unreplayed_falsifications"]),
-        ("Inconclusive pairs", counts["inconclusive_pairs"]),
-        ("Unsupported pairs", counts["unsupported_pairs"]),
+        ("Source validator records, old", counts["validator_records_old"]),
+        ("Source validator records, new", counts["validator_records_new"]),
+        ("Blueprint handler pairs", counts["handler_pairs"]),
+        ("Unique compiled program pairs", counts["unique_program_pairs"]),
+        (
+            "Unique changed program pairs",
+            counts["unique_changed_program_pairs"],
+        ),
+        ("Unique raw obligations", counts["unique_raw_obligations"]),
+        (
+            "Unique ledger obligations",
+            counts["unique_ledger_obligations"],
+        ),
+        (
+            "Deduplicated obligations",
+            counts["deduplicated_obligations"],
+        ),
+        (
+            "Deduplicated solver invocations",
+            counts["deduplicated_invocations"],
+        ),
+        ("Identical program pairs", counts["identical_program_pairs"]),
+        (
+            "Confirmed non-equivalent obligations",
+            counts["confirmed_non_equivalent_obligations"],
+        ),
+        (
+            "Inconclusive obligations",
+            counts["inconclusive_obligations"],
+        ),
+        (
+            "Unsupported obligations",
+            counts["unsupported_obligations"],
+        ),
+        ("ABI failures", counts["abi_failures"]),
+        ("Reused obligations", counts["reused_obligations"]),
         ("Build failures", counts["build_failures"]),
-        ("Compatibility differences", counts["compatibility_differences"]),
+        (
+            "Compatibility differences",
+            counts["compatibility_differences"],
+        ),
+        ("Feature rows", counts["feature_rows"]),
         ("Shared features covered", counts["shared_features_covered"]),
         ("Shared features missing", counts["shared_features_missing"]),
     )
@@ -1099,13 +1415,17 @@ def _summary_markdown(summary: dict[str, Any]) -> str:
         "",
         f"Strict verdict: **{'PASS' if summary['strict_pass'] else 'FAIL'}**",
         "",
-        "| Count | Value |",
+        "| Entity or state | Count |",
         "|---|---:|",
         *(f"| {label} | {value} |" for label, value in labels),
         "",
+        "Program-pair and semantic-obligation counts are unique; handler and feature links do not multiply proof counts.",
+        "",
     ]
     if summary["gaps"]:
-        lines.extend(["## Gaps", "", *(f"- {gap}" for gap in summary["gaps"]), ""])
+        lines.extend(
+            ["## Gaps", "", *(f"- {gap}" for gap in summary["gaps"]), ""]
+        )
     return "\n".join(lines)
 
 
@@ -1282,8 +1602,23 @@ def compare_package(
             covered_features_by_title=coverage_map,
             old_abi_inspection=builds["old"]["abi_inspection"],
             new_abi_inspection=builds["new"]["abi_inspection"],
+            old_abi_parser_error=builds["old"]["abi_inspection_error"],
+            new_abi_parser_error=builds["new"]["abi_inspection_error"],
+            repository=source_metadata.get(
+                "canonical_repository_url",
+                source_metadata.get("identity", "unknown"),
+            ),
+            package=package_name(package),
+            old_compiler_artifact_id=compilers[0].provenance.get(
+                "artifact_id", compilers[0].binary_sha256
+            ),
+            new_compiler_artifact_id=compilers[1].provenance.get(
+                "artifact_id", compilers[1].binary_sha256
+            ),
         )
-        discovered_pair_ids = {pair.pair_id for pair in pairing.pairs}
+        discovered_pair_ids = {
+            pair.program_pair_id for pair in pairing.program_pairs
+        }
         missing_requested_pairs = sorted(requested_pairs - discovered_pair_ids)
         if missing_requested_pairs:
             raise ValueError(
@@ -1291,12 +1626,45 @@ def compare_package(
                 + ", ".join(missing_requested_pairs)
             )
         script_difference_observed = any(
-            pair.old_script.sha256 != pair.new_script.sha256 for pair in pairing.pairs
+            pair.old_script.sha256 != pair.new_script.sha256
+            for pair in pairing.program_pairs
         )
         actual_backend = backend or RealBlasterBackend(config)
-        for pair in pairing.pairs:
-            raw_model, ledger_model = validator_input_models(pair)
-            cached = cached_pair_results.get(pair.pair_id)
+
+        def planned_obligations(
+            pair: ProgramPairRecord, model: InputModel
+        ) -> list[dict[str, Any]]:
+            kinds = (
+                (
+                    "ledger_domain_non_vacuity",
+                    "old_program_completion",
+                    "new_program_completion",
+                    "ledger_observational_equivalence",
+                )
+                if model.profile.startswith("ledger-valid")
+                else (
+                    "domain_non_vacuity",
+                    "old_program_completion",
+                    "new_program_completion",
+                    "observational_equivalence",
+                )
+            )
+            return [
+                SemanticObligationRecord.create(
+                    pair, model, kind, config.runtime_step_bound
+                ).to_dict()
+                for kind in kinds
+            ]
+
+        for pair in sorted(
+            pairing.program_pairs,
+            key=lambda record: (
+                record.old_script.sha256 == record.new_script.sha256,
+                record.program_pair_id,
+            ),
+        ):
+            raw_model, ledger_models = validator_input_models(pair)
+            cached = cached_pair_results.get(pair.program_pair_id)
             cached_matches = _cached_pair_matches(
                 cached,
                 pair,
@@ -1305,7 +1673,10 @@ def compare_package(
                 compiler_identities,
                 config,
             )
-            unselected = bool(requested_pairs) and pair.pair_id not in requested_pairs
+            unselected = (
+                bool(requested_pairs)
+                and pair.program_pair_id not in requested_pairs
+            )
             if cached_matches and ((resume and not force) or unselected):
                 if previous_bundle_root is not None:
                     _restore_reused_artifacts(
@@ -1313,10 +1684,32 @@ def compare_package(
                         previous_bundle_root,
                         bundle_root,
                     )
+                reused = json.loads(json.dumps(cached))
+                original_checksum = reused["artifact_checksum"]
+                original_attempt = reused["attempt_id"]
+                original_run = reused.get("run_id", run_id)
+                reused["attempt_id"] = SemanticObligationRecord.create(
+                    pair,
+                    raw_model,
+                    "observational_equivalence",
+                    config.runtime_step_bound,
+                ).attempt_id(config, current_attempt_sequence)
+                reused["attempt_sequence"] = current_attempt_sequence
+                reused["handler_pair_ids"] = list(pair.handler_pair_ids)
+                reused["handler_references"] = list(pair.handler_references)
+                reused["covered_feature_ids"] = list(pair.covered_feature_ids)
+                reused["evidence_reuse"] = {
+                    "original_attempt_id": original_attempt,
+                    "original_run_id": original_run,
+                    "original_artifact_checksum": original_checksum,
+                    "reuse_validation_result": "exact_identity_and_artifact_match",
+                    "new_attempt_id": reused["attempt_id"],
+                }
                 if (
                     resume
-                    and cached.get("status") == "blaster_falsified_unreplayed"
-                    and isinstance(cached.get("witness"), dict)
+                    and reused.get("status")
+                    == "blaster_falsified_unreplayed"
+                    and isinstance(reused.get("witness"), dict)
                 ):
                     replay = _replay_counterexample(
                         actual_backend,
@@ -1324,23 +1717,26 @@ def compare_package(
                         compiler_identities,
                         pair,
                         raw_model,
-                        cached["witness"],
+                        reused["witness"],
                         bundle_root,
                     )
-                    cached["counterexample_replay"] = replay
-                    raw_record = cached.get("model_results", {}).get(raw_model.profile)
+                    reused["counterexample_replay"] = replay
+                    raw_record = reused.get("model_results", {}).get(
+                        raw_model.semantic_model_id(config.runtime_step_bound)
+                    )
                     if isinstance(raw_record, dict):
                         raw_record["counterexample_replay"] = replay
                     if replay.get("confirmed"):
-                        cached["status"] = "confirmed_non_equivalent"
-                pair_results.append(cached)
-                reused_pair_ids.add(pair.pair_id)
+                        reused["status"] = "confirmed_non_equivalent"
+                pair_results.append(_seal_evidence_row(reused))
+                reused_pair_ids.add(pair.program_pair_id)
                 continue
             if unselected:
                 raise ValueError(
                     "no matching cached evidence exists for unselected pair "
-                    f"{pair.pair_id}"
+                    f"{pair.program_pair_id}"
                 )
+
             if pair.old_script.sha256 == pair.new_script.sha256:
                 identical_status = (
                     "expected_codegen_delta_not_observed"
@@ -1357,24 +1753,34 @@ def compare_package(
                     config=config,
                     attempt_sequence=current_attempt_sequence,
                 )
+                result["run_id"] = run_id
                 result["model_results"] = {
-                    raw_model.profile: {
-                        "status": identical_status,
-                        "input_model": raw_model.to_dict(),
-                    },
-                    ledger_model.profile: {
+                    model.semantic_model_id(config.runtime_step_bound): {
                         "status": (
                             identical_status
-                            if ledger_model.supported
+                            if model.supported
                             else "ledger_model_unsupported"
                         ),
-                        "input_model": ledger_model.to_dict(),
-                    },
+                        "semantic_model_id": model.semantic_model_id(
+                            config.runtime_step_bound
+                        ),
+                        "input_model": model.to_dict(),
+                        "semantic_obligations": [],
+                        "backend": None,
+                        "counterexample_replay": None,
+                    }
+                    for model in (raw_model, *ledger_models)
                 }
-                pair_results.append(result)
+                result["cache_binding"]["semantic_model_ids"] = sorted(
+                    result["model_results"]
+                )
+                result["cache_binding"]["logical_obligation_ids"] = []
+                pair_results.append(_seal_evidence_row(result))
                 continue
 
-            raw_backend_result = actual_backend.compare(pair, raw_model, bundle_root)
+            raw_backend_result = actual_backend.compare(
+                pair, raw_model, bundle_root
+            )
             raw_status = (
                 "equivalent_under_raw_model"
                 if raw_backend_result.status == "blaster_valid"
@@ -1390,6 +1796,7 @@ def compare_package(
                 config=config,
                 attempt_sequence=current_attempt_sequence,
             )
+            result["run_id"] = run_id
             raw_replay = None
             if (
                 raw_backend_result.status == "blaster_falsified_unreplayed"
@@ -1407,58 +1814,97 @@ def compare_package(
                 result["counterexample_replay"] = raw_replay
                 if raw_replay.get("confirmed"):
                     result["status"] = "confirmed_non_equivalent"
-
-            if ledger_model.supported:
-                ledger_backend_result = actual_backend.compare(
-                    pair, ledger_model, bundle_root
-                )
-                ledger_status = (
-                    "equivalent_under_ledger_model"
-                    if ledger_backend_result.status == "blaster_valid"
-                    else ledger_backend_result.status
-                )
-                ledger_replay = None
-                if (
-                    ledger_backend_result.status == "blaster_falsified_unreplayed"
-                    and ledger_backend_result.witness
-                ):
-                    ledger_replay = _replay_counterexample(
-                        actual_backend,
-                        config,
-                        compiler_identities,
-                        pair,
-                        ledger_model,
-                        ledger_backend_result.witness,
-                        bundle_root,
-                    )
-                ledger_record = {
-                    "status": ledger_status,
-                    "input_model": ledger_model.to_dict(),
-                    "backend": ledger_backend_result.to_dict(),
-                    "counterexample_replay": ledger_replay,
-                }
-                if (
-                    result["status"] == "confirmed_non_equivalent"
-                    and ledger_status == "equivalent_under_ledger_model"
-                ):
-                    result["status"] = "off_ledger_difference"
-            else:
-                ledger_record = {
-                    "status": "ledger_model_unsupported",
-                    "input_model": ledger_model.to_dict(),
-                    "backend": None,
-                    "counterexample_replay": None,
-                }
-            result["model_results"] = {
-                raw_model.profile: {
+            model_results: dict[str, dict[str, Any]] = {
+                raw_model.semantic_model_id(config.runtime_step_bound): {
                     "status": raw_status,
+                    "semantic_model_id": raw_model.semantic_model_id(
+                        config.runtime_step_bound
+                    ),
                     "input_model": raw_model.to_dict(),
+                    "semantic_obligations": planned_obligations(
+                        pair, raw_model
+                    ),
                     "backend": raw_backend_result.to_dict(),
                     "counterexample_replay": raw_replay,
-                },
-                ledger_model.profile: ledger_record,
+                }
             }
-            pair_results.append(result)
+            ledger_statuses: list[str] = []
+            for ledger_model in ledger_models:
+                model_id = ledger_model.semantic_model_id(
+                    config.runtime_step_bound
+                )
+                if ledger_model.supported:
+                    ledger_backend_result = actual_backend.compare(
+                        pair, ledger_model, bundle_root
+                    )
+                    ledger_status = (
+                        "equivalent_under_ledger_model"
+                        if ledger_backend_result.status == "blaster_valid"
+                        else ledger_backend_result.status
+                    )
+                    ledger_replay = None
+                    if (
+                        ledger_backend_result.status
+                        == "blaster_falsified_unreplayed"
+                        and ledger_backend_result.witness
+                    ):
+                        ledger_replay = _replay_counterexample(
+                            actual_backend,
+                            config,
+                            compiler_identities,
+                            pair,
+                            ledger_model,
+                            ledger_backend_result.witness,
+                            bundle_root,
+                        )
+                        if ledger_replay.get("confirmed"):
+                            ledger_status = "confirmed_non_equivalent"
+                    ledger_backend = ledger_backend_result.to_dict()
+                else:
+                    ledger_status = "ledger_model_unsupported"
+                    ledger_replay = None
+                    ledger_backend = None
+                ledger_statuses.append(ledger_status)
+                model_results[model_id] = {
+                    "status": ledger_status,
+                    "semantic_model_id": model_id,
+                    "input_model": ledger_model.to_dict(),
+                    "semantic_obligations": planned_obligations(
+                        pair, ledger_model
+                    ),
+                    "backend": ledger_backend,
+                    "counterexample_replay": ledger_replay,
+                }
+            if result["status"] == "confirmed_non_equivalent":
+                if "confirmed_non_equivalent" in ledger_statuses:
+                    result["status"] = "confirmed_non_equivalent"
+                elif ledger_statuses and all(
+                    status
+                    in {
+                        "equivalent_under_ledger_model",
+                        "ledger_model_unsupported",
+                    }
+                    for status in ledger_statuses
+                ) and any(
+                    status == "equivalent_under_ledger_model"
+                    for status in ledger_statuses
+                ):
+                    result["status"] = "off_ledger_difference"
+            result["model_results"] = model_results
+            logical_ids = sorted(
+                {
+                    obligation["logical_obligation_id"]
+                    for model_record in model_results.values()
+                    for obligation in model_record["semantic_obligations"]
+                }
+            )
+            result["cache_binding"]["semantic_model_ids"] = sorted(
+                model_results
+            )
+            result["cache_binding"][
+                "logical_obligation_ids"
+            ] = logical_ids
+            pair_results.append(_seal_evidence_row(result))
         pair_results.extend(
             _compatibility_result(
                 row,
@@ -1468,29 +1914,221 @@ def compare_package(
             )
             for row in pairing.compatibility_results
         )
-    script_pairs = {
+
+    validator_records = {
         "schema_version": CHECKER_SCHEMA_VERSION,
-        "record_count": len(pairing.pairs) if pairing else 0,
-        "records": [pair.to_dict() for pair in pairing.pairs] if pairing else [],
+        "old": [
+            row.to_dict() for row in pairing.validator_records_old
+        ]
+        if pairing
+        else [],
+        "new": [
+            row.to_dict() for row in pairing.validator_records_new
+        ]
+        if pairing
+        else [],
     }
-    write_json(bundle_root / "script-pairs.json", script_pairs)
-    pair_results.sort(key=lambda row: row["pair_id"])
+    write_json(bundle_root / "validator-records.json", validator_records)
+    handler_pairs = {
+        "schema_version": CHECKER_SCHEMA_VERSION,
+        "record_count": len(pairing.handler_pairs) if pairing else 0,
+        "records": [
+            row.to_dict() for row in pairing.handler_pairs
+        ]
+        if pairing
+        else [],
+    }
+    write_json(bundle_root / "handler-pairs.json", handler_pairs)
+    program_pairs = {
+        "schema_version": CHECKER_SCHEMA_VERSION,
+        "record_count": len(pairing.program_pairs) if pairing else 0,
+        "records": [
+            pair.to_dict() for pair in pairing.program_pairs
+        ]
+        if pairing
+        else [],
+    }
+    write_json(bundle_root / "program-pairs.json", program_pairs)
+    pair_results.sort(
+        key=lambda row: str(
+            row.get("program_pair_id", row.get("pair_id", ""))
+        )
+    )
+    serialized_program_results = [
+        row
+        for row in pair_results
+        if isinstance(row.get("program_pair_id"), str)
+    ]
+    task_results = [
+        row
+        for row in pair_results
+        if not isinstance(row.get("program_pair_id"), str)
+    ]
     write_json(
         bundle_root / "pair-results.json",
         {
             "schema_version": CHECKER_SCHEMA_VERSION,
-            "record_count": len(pair_results),
-            "records": pair_results,
+            "record_count": len(serialized_program_results),
+            "records": serialized_program_results,
+        },
+    )
+    write_json(
+        bundle_root / "task-results.json",
+        {
+            "schema_version": CHECKER_SCHEMA_VERSION,
+            "record_count": len(task_results),
+            "records": task_results,
         },
     )
     for row in pair_results:
-        write_json(bundle_root / "pairs" / row["pair_id"] / "result.json", row)
+        pair_id = row.get("program_pair_id")
+        if isinstance(pair_id, str):
+            write_json(
+                bundle_root / "pairs" / pair_id / "result.json",
+                row,
+            )
+
+    semantic_obligations_by_id: dict[str, dict[str, Any]] = {}
+    obligation_results: list[dict[str, Any]] = []
+    for row in pair_results:
+        program_pair_id_value = row.get("program_pair_id")
+        if not isinstance(program_pair_id_value, str):
+            continue
+        for model_record in row.get("model_results", {}).values():
+            backend_record = model_record.get("backend")
+            proof_results = (
+                backend_record.get("proof_obligations", {})
+                if isinstance(backend_record, dict)
+                else {}
+            )
+            for obligation in model_record.get(
+                "semantic_obligations", []
+            ):
+                obligation_id = obligation["logical_obligation_id"]
+                previous = semantic_obligations_by_id.setdefault(
+                    obligation_id, obligation
+                )
+                if previous != obligation:
+                    raise RuntimeError(
+                        f"conflicting semantic obligation {obligation_id}"
+                    )
+                proof = proof_results.get(
+                    obligation["obligation_kind"], {}
+                )
+                result_status = proof.get(
+                    "status", model_record["status"]
+                )
+                result_identity = {
+                    "logical_obligation_id": obligation_id,
+                    "checker_configuration_id": config.checker_configuration()[
+                        "checker_configuration_id"
+                    ],
+                    "attempt_id": row["attempt_id"],
+                    "status": result_status,
+                    "generated_lean_sha256": proof.get(
+                        "generated_lean_sha256"
+                    ),
+                    "witness_sha256": (
+                        backend_record.get("witness", {}).get(
+                            "witness_sha256"
+                        )
+                        if isinstance(backend_record, dict)
+                        and isinstance(
+                            backend_record.get("witness"), dict
+                        )
+                        else None
+                    ),
+                }
+                obligation_results.append(
+                    {
+                        "evidence_result_id": stable_hash(
+                            result_identity
+                        ),
+                        **result_identity,
+                        "program_pair_id": program_pair_id_value,
+                        "semantic_model_id": obligation[
+                            "semantic_model_id"
+                        ],
+                        "obligation_kind": obligation[
+                            "obligation_kind"
+                        ],
+                        "generated_source_schema_version": (
+                            GENERATED_LEAN_SCHEMA_VERSION
+                        ),
+                        "generated_lean_path": proof.get(
+                            "generated_lean_path"
+                        ),
+                        "solver_status": proof.get("solver_status"),
+                        "reused": row.get("evidence_reuse")
+                        is not None,
+                    }
+                )
+    semantic_obligations = {
+        "schema_version": CHECKER_SCHEMA_VERSION,
+        "record_count": len(semantic_obligations_by_id),
+        "records": sorted(
+            semantic_obligations_by_id.values(),
+            key=lambda row: row["logical_obligation_id"],
+        ),
+    }
+    write_json(
+        bundle_root / "semantic-obligations.json",
+        semantic_obligations,
+    )
+    obligation_results.sort(
+        key=lambda row: (
+            row["logical_obligation_id"],
+            row["attempt_id"],
+        )
+    )
+    write_json(
+        bundle_root / "obligation-results.json",
+        {
+            "schema_version": CHECKER_SCHEMA_VERSION,
+            "record_count": len(obligation_results),
+            "records": obligation_results,
+        },
+    )
+    write_json(
+        bundle_root / "validator-links.json",
+        {
+            "schema_version": CHECKER_SCHEMA_VERSION,
+            "record_count": len(pairing.handler_pairs)
+            if pairing
+            else 0,
+            "records": [
+                {
+                    **handler.to_dict(),
+                    "logical_obligation_ids": sorted(
+                        {
+                            obligation[
+                                "logical_obligation_id"
+                            ]
+                            for obligation in semantic_obligations_by_id.values()
+                            if obligation["program_pair_id"]
+                            == handler.program_pair_id
+                        }
+                    ),
+                    "evidence_result_ids": sorted(
+                        {
+                            result["evidence_result_id"]
+                            for result in obligation_results
+                            if result["program_pair_id"]
+                            == handler.program_pair_id
+                        }
+                    ),
+                }
+                for handler in (pairing.handler_pairs if pairing else ())
+            ],
+        },
+    )
     feature_coverage = (
         _feature_coverage(
             manifest,
             sentinel_evidence,
             pair_results,
             builds,
+            obligation_results,
         )
         if not sentinel or sentinel_evidence is not None
         else {
@@ -1501,6 +2139,10 @@ def compare_package(
         }
     )
     write_json(bundle_root / "feature-coverage.json", feature_coverage)
+    write_json(
+        bundle_root / "feature-links.json",
+        _compact_feature_links(feature_coverage),
+    )
 
     source_state_after = hash_package_tree(package, include_lock=True)
     source_immutable = source_state_before == source_state_after
@@ -1509,35 +2151,159 @@ def compare_package(
     if pairing and pairing.old_count == 0 and pairing.new_count == 0:
         gaps.append("no_validators_discovered")
     applicable_statuses = [row["status"] for row in pair_results]
-    feature_statuses = [row["status"] for row in feature_coverage["records"]]
+    feature_statuses = [
+        row["status"] for row in feature_coverage["records"]
+    ]
     statuses = applicable_statuses + feature_statuses
+    program_result_rows = [
+        row
+        for row in pair_results
+        if isinstance(row.get("program_pair_id"), str)
+    ]
+    program_status_counts = {
+        status: sum(row["status"] == status for row in program_result_rows)
+        for status in sorted(
+            {row["status"] for row in program_result_rows}
+        )
+    }
+    obligation_status_counts = {
+        status: sum(
+            row["status"] == status for row in obligation_results
+        )
+        for status in sorted(
+            {str(row["status"]) for row in obligation_results}
+        )
+    }
+    program_state_invariant = (
+        sum(program_status_counts.values())
+        == len(pairing.program_pairs)
+        if pairing
+        else not program_result_rows
+    )
+    obligation_state_invariant = (
+        sum(obligation_status_counts.values())
+        == len(semantic_obligations_by_id)
+        == len(obligation_results)
+    )
+    if not program_state_invariant or not obligation_state_invariant:
+        gaps.append("report_count_invariant_failed")
     strict_pass = (
         not gaps
         and bool(statuses)
-        and all(status in STRICT_PASSING_STATUSES for status in statuses)
+        and all(
+            status in STRICT_PASSING_STATUSES for status in statuses
+        )
     )
+    raw_obligation_ids = {
+        row["logical_obligation_id"]
+        for row in semantic_obligations_by_id.values()
+        if str(row["input_model"]["profile"]).startswith("raw-uplc")
+    }
+    ledger_obligation_ids = set(semantic_obligations_by_id) - raw_obligation_ids
+    changed_pairs = [
+        row
+        for row in program_result_rows
+        if row["old_program_artifact"]["script_sha256"]
+        != row["new_program_artifact"]["script_sha256"]
+    ]
+    unsupported_statuses = {
+        "blaster_unsupported",
+        "raw_model_unsupported",
+        "ledger_model_unsupported",
+        "fallback_purpose_unsupported",
+    }
+    inconclusive_statuses = {
+        "blaster_inconclusive",
+        "blaster_timeout",
+        "blaster_error",
+        "domain_non_vacuous_failed",
+    }
+    abi_failure_statuses = {
+        "old_raw_abi_unresolved",
+        "new_raw_abi_unresolved",
+        "raw_abi_mismatch",
+        "raw_abi_parser_error",
+        "raw_model_not_bound_to_abi",
+        "compiled_abi_unverified",
+        "compiled_abi_mismatch",
+    }
     counts = {
-        "validators_discovered": (
-            (pairing.old_count + pairing.new_count) if pairing else 0
+        "validator_records_old": pairing.old_count if pairing else 0,
+        "validator_records_new": pairing.new_count if pairing else 0,
+        "handler_pairs": len(pairing.handler_pairs) if pairing else 0,
+        "unique_program_pairs": len(pairing.program_pairs)
+        if pairing
+        else 0,
+        "unique_changed_program_pairs": len(changed_pairs),
+        "unique_raw_obligations": len(raw_obligation_ids),
+        "unique_ledger_obligations": len(ledger_obligation_ids),
+        "deduplicated_obligations": max(
+            0,
+            (
+                len(pairing.handler_pairs) * 4
+                if pairing
+                else 0
+            )
+            - len(raw_obligation_ids),
         ),
-        "validators_discovered_old": pairing.old_count if pairing else 0,
-        "validators_discovered_new": pairing.new_count if pairing else 0,
-        "validators_paired": len(pairing.pairs) if pairing else 0,
-        "identical_pairs": sum(row["status"] == "identical" for row in pair_results),
-        "blaster_valid_pairs": sum(
-            row["status"] == "blaster_valid" for row in pair_results
+        "deduplicated_invocations": max(
+            0,
+            (
+                sum(
+                    pair.old_script.sha256
+                    != pair.new_script.sha256
+                    for pair in pairing.program_pairs
+                    for _handler in pair.handler_pair_ids
+                )
+                if pairing
+                else 0
+            )
+            - len(changed_pairs),
         ),
-        "confirmed_differences": sum(
-            row["status"] == "confirmed_non_equivalent" for row in pair_results
+        "identical_program_pairs": sum(
+            row["status"] == "identical" for row in program_result_rows
+        ),
+        "bounded_equivalent_obligations": sum(
+            row["status"] == "bounded_equivalent"
+            for row in obligation_results
+        ),
+        "equivalent_under_raw_model_obligations": sum(
+            row["status"] in {"proven", "valid"}
+            and row["logical_obligation_id"] in raw_obligation_ids
+            for row in obligation_results
+        ),
+        "equivalent_under_ledger_model_obligations": sum(
+            row["status"] in {"proven", "valid"}
+            and row["logical_obligation_id"] in ledger_obligation_ids
+            for row in obligation_results
+        ),
+        "off_ledger_differences": sum(
+            row["status"] == "off_ledger_difference"
+            for row in program_result_rows
+        ),
+        "confirmed_non_equivalent_obligations": sum(
+            row["status"] in {"falsified", "confirmed_non_equivalent"}
+            for row in obligation_results
         ),
         "unreplayed_falsifications": sum(
-            row["status"] == "blaster_falsified_unreplayed" for row in pair_results
+            row["status"] == "blaster_falsified_unreplayed"
+            for row in obligation_results
         ),
-        "inconclusive_pairs": sum(
-            row["status"] == "blaster_inconclusive" for row in pair_results
+        "inconclusive_obligations": sum(
+            row["status"] in inconclusive_statuses
+            or row["status"] == "inconclusive"
+            for row in obligation_results
         ),
-        "unsupported_pairs": sum(
-            row["status"] == "blaster_unsupported" for row in pair_results
+        "unsupported_obligations": sum(
+            row["status"] in unsupported_statuses
+            for row in obligation_results
+        ),
+        "abi_failures": sum(
+            row["status"] in abi_failure_statuses
+            for row in pair_results
+        ),
+        "reused_obligations": sum(
+            row["reused"] for row in obligation_results
         ),
         "build_failures": sum(
             row["status"] in {"old_build_failed", "new_build_failed"}
@@ -1549,12 +2315,11 @@ def compare_package(
                 "validator_missing_old",
                 "validator_missing_new",
                 "validator_signature_changed",
-                "compiled_abi_unverified",
-                "compiled_abi_mismatch",
-                "feature_not_shared",
+                *abi_failure_statuses,
             }
             for row in pair_results
         ),
+        "feature_rows": len(feature_coverage["records"]),
         "shared_features_covered": sum(
             row["status"] in STRICT_PASSING_STATUSES
             for row in feature_coverage["records"]
@@ -1563,6 +2328,8 @@ def compare_package(
             row["status"] not in STRICT_PASSING_STATUSES
             for row in feature_coverage["records"]
         ),
+        "program_state_total": sum(program_status_counts.values()),
+        "obligation_state_total": sum(obligation_status_counts.values()),
     }
     summary = {
         "schema_version": CHECKER_SCHEMA_VERSION,
@@ -1573,6 +2340,16 @@ def compare_package(
         "strict_pass": strict_pass,
         "best_effort_completed": True,
         "counts": counts,
+        "program_status_counts": program_status_counts,
+        "obligation_status_counts": obligation_status_counts,
+        "count_invariants": {
+            "program_final_states_equal_unique_program_pairs": (
+                program_state_invariant
+            ),
+            "obligation_final_states_equal_unique_obligations": (
+                obligation_state_invariant
+            ),
+        },
         "status_counts": {
             status: applicable_statuses.count(status)
             for status in sorted(set(applicable_statuses))
@@ -1580,15 +2357,7 @@ def compare_package(
         "selected_pair_ids": sorted(requested_pairs),
         "reused_pair_count": len(reused_pair_ids),
         "require_script_difference": require_script_difference,
-        "script_difference_observed": (
-            any(
-                row.get("old_script", {}).get("sha256")
-                != row.get("new_script", {}).get("sha256")
-                for row in pair_results
-                if isinstance(row.get("old_script"), dict)
-                and isinstance(row.get("new_script"), dict)
-            )
-        ),
+        "script_difference_observed": bool(changed_pairs),
         "reused_pair_ids": sorted(reused_pair_ids),
         "gaps": sorted(set(gaps)),
         "output": str(bundle_root),

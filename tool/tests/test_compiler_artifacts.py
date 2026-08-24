@@ -16,6 +16,7 @@ from equiv_checker.compiler_artifacts import (
     compiler_from_manifest,
     resolve_release_ref,
     verify_compiler_manifest,
+    verify_release_lock,
 )
 
 
@@ -300,6 +301,86 @@ class CompilerArtifactTests(unittest.TestCase):
         self.assertEqual(first["source"]["source_tree_sha256"], second["source"]["source_tree_sha256"])
         self.assertEqual(first["artifact_id"], second["artifact_id"])
 
+
+    @patch(
+        "equiv_checker.compiler_artifacts._build_binary",
+        side_effect=_fake_builder(),
+    )
+    def test_complete_release_lock_binds_stable_and_platform_fields(
+        self, _build
+    ) -> None:
+        output = self.root / "release"
+        manifest = build_release(
+            ref="v1.1.23",
+            output=output,
+            aiken_source=self.source,
+        )
+        source = manifest["source"]
+        target = manifest["target"]
+        platform_key = "-".join(
+            str(target[key])
+            for key in ("platform", "architecture", "target_triple")
+        )
+        stable = {
+            "canonical_upstream_repository": source[
+                "repository_url"
+            ].removesuffix(".git").lower(),
+            "release_tag": source["ref"],
+            "annotated_tag_object": source["tag_object_sha"],
+            "tag_target_type": source["tag_target_type"],
+            "resolved_commit_sha": source["commit_sha"],
+            "git_tree_sha": source["source_tree_git_sha"],
+            "source_tree_sha256": source["source_tree_sha256"],
+            "cargo_lock_sha256": source["cargo_lock_sha256"],
+            "reported_aiken_version": manifest["binary"][
+                "reported_version"
+            ],
+            "required_rust_version": source["required_rust_version"],
+            "build_command_class": manifest["build"]["command"],
+        }
+        artifact = {
+            "platform": target["platform"],
+            "architecture": target["architecture"],
+            "target_triple": target["target_triple"],
+            "binary_sha256": manifest["binary"]["sha256"],
+            "compiler_artifact_id": manifest["artifact_id"],
+        }
+        lock = {
+            "schema_version": 1,
+            "releases": {
+                "v1.1.23": {
+                    "stable": stable,
+                    "platform_artifacts": {platform_key: artifact},
+                }
+            },
+        }
+        lock_path = self.root / "release.lock.json"
+        lock_path.write_text(json.dumps(lock), encoding="utf-8")
+        self.assertTrue(
+            verify_release_lock(
+                output / "compiler.json", lock_path
+            )["valid"]
+        )
+        for field in stable:
+            with self.subTest(stable_field=field):
+                tampered = json.loads(json.dumps(lock))
+                tampered["releases"]["v1.1.23"]["stable"][field] = "wrong"
+                lock_path.write_text(json.dumps(tampered), encoding="utf-8")
+                with self.assertRaises(RuntimeError):
+                    verify_release_lock(
+                        output / "compiler.json", lock_path
+                    )
+        for field in artifact:
+            with self.subTest(platform_field=field):
+                tampered = json.loads(json.dumps(lock))
+                tampered["releases"]["v1.1.23"][
+                    "platform_artifacts"
+                ][platform_key][field] = "wrong"
+                lock_path.write_text(json.dumps(tampered), encoding="utf-8")
+                with self.assertRaises(RuntimeError):
+                    verify_release_lock(
+                        output / "compiler.json", lock_path
+                    )
 
 if __name__ == "__main__":
     unittest.main()

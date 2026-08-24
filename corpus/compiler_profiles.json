@@ -34,6 +34,18 @@
       "require_script_difference": false,
       "expected_semantic_status": null,
       "expected_strict_result": null
+    },
+    {
+      "id": "local-candidate-v1.1.21-v1.1.22",
+      "name": "local-candidate-changed-output",
+      "kind": "local",
+      "old_ref": "v1.1.21",
+      "new_ref": "v1.1.22",
+      "fixture": "fixtures/historical-codegen-equivalent",
+      "feature_contract": null,
+      "require_script_difference": true,
+      "expected_semantic_status": "equivalent_under_raw_model",
+      "expected_strict_result": "pass"
     }
   ]
 }

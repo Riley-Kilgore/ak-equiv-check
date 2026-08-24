@@ -177,7 +177,7 @@ class PackageRunnerTests(unittest.TestCase):
                 backend=backend,
             )
             self.assertTrue(summary["strict_pass"])
-            self.assertEqual(summary["counts"]["identical_pairs"], 1)
+            self.assertEqual(summary["counts"]["identical_program_pairs"], 1)
             self.assertEqual(backend.calls, [])
             self.assertEqual(hash_package_tree(package, include_lock=True), before)
             self.assertTrue(summary["source_immutable"])
@@ -257,7 +257,7 @@ class PackageRunnerTests(unittest.TestCase):
                 for bundle in bundles
             ]
             pairs = [
-                json.loads((bundle / "script-pairs.json").read_text())["records"][0]
+                json.loads((bundle / "program-pairs.json").read_text())["records"][0]
                 for bundle in bundles
             ]
             evidence = [
@@ -268,7 +268,7 @@ class PackageRunnerTests(unittest.TestCase):
                 runs[0]["source"]["identity"],
                 runs[1]["source"]["identity"],
             )
-            self.assertEqual(pairs[0]["pair_id"], pairs[1]["pair_id"])
+            self.assertEqual(pairs[0]["program_pair_id"], pairs[1]["program_pair_id"])
             self.assertEqual(evidence[0]["evidence_id"], evidence[1]["evidence_id"])
 
     def test_resume_reuses_valid_pairs_and_reruns_only_corrupt_evidence(self) -> None:
@@ -277,11 +277,11 @@ class PackageRunnerTests(unittest.TestCase):
             package = write_package(root)
             old_rows = [
                 validator("module.first.mint", IDENTITY_HEX),
-                validator("module.second.mint", IDENTITY_HEX),
+                validator("module.second.mint", ZERO_HEX),
             ]
             new_rows = [
                 validator("module.first.mint", ZERO_HEX),
-                validator("module.second.mint", ZERO_HEX),
+                validator("module.second.mint", IDENTITY_HEX),
             ]
             compilers = self._compilers(root, old_rows, new_rows)
             config = fast_config(root)
@@ -296,7 +296,7 @@ class PackageRunnerTests(unittest.TestCase):
             )
             bundle = Path(first["output"])
             pair_ids = [
-                row["pair_id"]
+                row["program_pair_id"]
                 for row in json.loads(
                     (bundle / "pair-results.json").read_text()
                 )["records"]
@@ -327,11 +327,11 @@ class PackageRunnerTests(unittest.TestCase):
             package = write_package(root)
             old_rows = [
                 validator("module.first.mint", IDENTITY_HEX),
-                validator("module.second.mint", IDENTITY_HEX),
+                validator("module.second.mint", ZERO_HEX),
             ]
             new_rows = [
                 validator("module.first.mint", ZERO_HEX),
-                validator("module.second.mint", ZERO_HEX),
+                validator("module.second.mint", IDENTITY_HEX),
             ]
             compilers = self._compilers(root, old_rows, new_rows)
             config = fast_config(root)
@@ -346,8 +346,8 @@ class PackageRunnerTests(unittest.TestCase):
             records = json.loads(
                 (Path(first["output"]) / "pair-results.json").read_text()
             )["records"]
-            selected = records[0]["pair_id"]
-            unselected = records[1]["pair_id"]
+            selected = records[0]["program_pair_id"]
+            unselected = records[1]["program_pair_id"]
 
             backend = FakeBackend(config, "blaster_valid")
             partial = compare_package(
@@ -363,7 +363,7 @@ class PackageRunnerTests(unittest.TestCase):
             self.assertEqual(partial["selected_pair_ids"], [selected])
             self.assertEqual(partial["reused_pair_ids"], [unselected])
             self.assertEqual(backend.calls, [selected, selected])
-            self.assertEqual(partial["counts"]["validators_paired"], 2)
+            self.assertEqual(partial["counts"]["handler_pairs"], 2)
 
     def test_dynamic_validator_counts_have_no_fixed_schema_constant(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -380,11 +380,11 @@ class PackageRunnerTests(unittest.TestCase):
                 blaster_config=config,
                 backend=FakeBackend(config, "blaster_error"),
             )
-            self.assertEqual(summary["counts"]["validators_paired"], 3)
+            self.assertEqual(summary["counts"]["handler_pairs"], 3)
             pairs = json.loads(
-                (Path(summary["output"]) / "script-pairs.json").read_text()
+                (Path(summary["output"]) / "program-pairs.json").read_text()
             )
-            self.assertEqual(pairs["record_count"], 3)
+            self.assertEqual(pairs["record_count"], 1)
             self.assertEqual(summary["schema_errors"], [])
 
     def test_missing_contract_manifest_row_is_a_coverage_failure(self) -> None:
@@ -416,7 +416,7 @@ class PackageRunnerTests(unittest.TestCase):
         )
         self.assertEqual(coverage["record_count"], 1)
         self.assertFalse(coverage["records"][0]["manifest_present"])
-        self.assertEqual(coverage["records"][0]["status"], "feature_not_shared")
+        self.assertEqual(coverage["records"][0]["status"], "pair_missing")
 
     def test_build_failures_are_labeled_separately(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

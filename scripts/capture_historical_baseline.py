@@ -21,68 +21,32 @@ def _read(path: Path) -> dict[str, Any]:
 
 def _write(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(value, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _summary_markdown(summary: dict[str, Any]) -> str:
-    profile = summary["profile"]
-    counts = summary["counts"]
-    lines = [
-        f"# {profile['profile_name']}",
-        "",
-        f"- Profile ID: `{profile['profile_id']}`",
-        f"- Semantic status: `{profile['semantic_status']}`",
-        f"- Semantic strict result: `{profile['semantic_strict_result']}`",
-        f"- Profile expectation: `{profile['profile_expectation']}`",
-        f"- Expectation matched: `{str(profile['expectation_matched']).lower()}`",
-        f"- Profile pass: `{str(profile['profile_pass']).lower()}`",
-        f"- Script difference observed: `{str(summary['script_difference_observed']).lower()}`",
-        "",
-        "## Counts",
-        "",
-        "| Metric | Count |",
-        "| --- | ---: |",
-    ]
-    lines.extend(
-        f"| `{name}` | {count} |" for name, count in sorted(counts.items())
+def _canonical(value: Any) -> str:
+    return json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
     )
-    lines.extend(["", "## Remaining gaps", ""])
-    if summary["gaps"]:
-        lines.extend(f"- `{gap}`" for gap in summary["gaps"])
-    else:
-        lines.append("None.")
-    return "\n".join(lines) + "\n"
 
 
-def _ci_provenance(
-    value: dict[str, Any],
-    *,
-    profile_id: str,
-    baseline_run_id: str,
-) -> dict[str, Any]:
-    if value.get("schema_version") != 1:
-        raise ValueError("CI provenance must use schema_version 1")
-    if value.get("profile_id") != profile_id:
-        raise ValueError("CI provenance profile does not match the baseline")
-    if value.get("attestation_kind") != "public_ci_reproduction":
-        raise ValueError("CI provenance must attest a public CI reproduction")
-    for field in ("workflow_run", "job", "artifact"):
-        if not isinstance(value.get(field), dict):
-            raise ValueError(f"CI provenance is missing {field}")
-    if value["workflow_run"].get("conclusion") != "success":
-        raise ValueError("CI workflow reproduction did not succeed")
-    if value["job"].get("conclusion") != "success":
-        raise ValueError("CI profile job did not succeed")
-    digest = value["artifact"].get("digest")
-    if not isinstance(digest, str) or not digest.startswith("sha256:"):
-        raise ValueError("CI artifact digest must be a SHA-256 digest")
-    result = dict(value)
-    result["baseline_run_id"] = baseline_run_id
-    return result
+def _identity(kind: str, payload: Any) -> str:
+    return hashlib.sha256(
+        _canonical(
+            {
+                "identity_schema_version": "equiv-evidence-identity/v2",
+                "identity_kind": kind,
+                "value": payload,
+            }
+        ).encode("utf-8")
+    ).hexdigest()
 
 
 def _profile(identifier: str) -> dict[str, Any]:
@@ -97,103 +61,131 @@ def _profile(identifier: str) -> dict[str, Any]:
     return matches[0]
 
 
+def _records(run: Path, filename: str) -> list[dict[str, Any]]:
+    value = _read(run / filename)
+    records = value.get("records")
+    if not isinstance(records, list) or not all(
+        isinstance(row, dict) for row in records
+    ):
+        raise ValueError(f"invalid record set: {run / filename}")
+    return records
+
+
+def _portable(value: Any) -> Any:
+    if isinstance(value, list):
+        return [_portable(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+    result: dict[str, Any] = {}
+    for key, item in value.items():
+        if isinstance(item, str) and (
+            key == "executable"
+            or key == "repository_root"
+            or key == "manifest_path"
+            or (key.endswith("_path") and Path(item).is_absolute())
+        ):
+            continue
+        result[key] = _portable(item)
+    return result
+
+
 def _manifest_record(path: Path) -> dict[str, Any]:
     manifest = _read(path)
-    source = manifest["source"]
     return {
-        "artifact_id": manifest["artifact_id"],
-        "artifact_kind": manifest["artifact_kind"],
-        "binary": manifest["binary"],
-        "build": manifest["build"],
-        "cache_key": manifest["cache_key"],
-        "label": manifest["label"],
-        "reproducibility": manifest["reproducibility"],
-        "source": source,
-        "target": manifest["target"],
-        "toolchain": manifest["toolchain"],
+        key: manifest[key]
+        for key in (
+            "artifact_id",
+            "artifact_kind",
+            "binary",
+            "build",
+            "cache_key",
+            "label",
+            "reproducibility",
+            "source",
+            "target",
+            "toolchain",
+        )
     }
 
 
-def _portable_compiler(value: Any) -> Any:
-    if not isinstance(value, dict):
-        return value
-    compiler = {
-        key: item
-        for key, item in value.items()
-        if key != "executable"
-    }
-    provenance = compiler.get("provenance")
-    if isinstance(provenance, dict):
-        compiler["provenance"] = {
-            key: item
-            for key, item in provenance.items()
-            if key != "manifest_path"
-        }
-    return compiler
+def _write_ndjson(path: Path, records: list[dict[str, Any]]) -> None:
+    path.write_text(
+        "".join(
+            json.dumps(_portable(row), sort_keys=True) + "\n"
+            for row in records
+        ),
+        encoding="utf-8",
+    )
 
 
-def _compact_replay(value: Any, run: Path) -> Any:
-    if not isinstance(value, dict):
-        return value
-    replay = dict(value)
-    for label in ("old", "new"):
-        evaluation = replay.get(label)
-        if isinstance(evaluation, dict):
-            replay[label] = {
-                key: item
-                for key, item in evaluation.items()
-                if key != "command"
-            }
-    arguments_path = replay.get("arguments_path")
-    if isinstance(arguments_path, str):
-        path = run / arguments_path
-        if _sha256(path) != replay.get("arguments_sha256"):
-            raise ValueError(f"replay argument hash mismatch: {path}")
-        replay["arguments"] = _read(path)
-    return replay
+def _summary_markdown(summary: dict[str, Any]) -> str:
+    profile = summary["profile"]
+    counts = summary["counts"]
+    lines = [
+        f"# {profile['profile_name']}",
+        "",
+        f"- Profile ID: `{profile['profile_id']}`",
+        f"- Semantic status: `{profile['semantic_status']}`",
+        f"- Semantic strict result: `{profile['semantic_strict_result']}`",
+        f"- Expectation matched: `{str(profile['expectation_matched']).lower()}`",
+        f"- Source dirty: `{str(summary['source_provenance']['dirty']).lower()}`",
+        "",
+        "## Evidence counts",
+        "",
+        "| Metric | Count |",
+        "| --- | ---: |",
+    ]
+    lines.extend(
+        f"| `{name}` | {count} |"
+        for name, count in sorted(counts.items())
+    )
+    lines.extend(["", "## Remaining gaps", ""])
+    if summary["gaps"]:
+        lines.extend(f"- `{gap}`" for gap in summary["gaps"])
+    else:
+        lines.append("None.")
+    return "\n".join(lines) + "\n"
 
 
-def _compact_pair(row: dict[str, Any], run: Path) -> dict[str, Any]:
-    witness = row.get("witness")
-    compiler_pair = row.get("compiler_pair")
-    if isinstance(compiler_pair, dict):
-        compiler_pair = {
-            label: _portable_compiler(compiler)
-            for label, compiler in compiler_pair.items()
-        }
-    source_identity = row.get("source_identity")
-    if isinstance(source_identity, dict):
-        source_identity = {
-            key: item
-            for key, item in source_identity.items()
-            if key != "repository_root"
-        }
+def _ci_attestation(
+    value: dict[str, Any],
+    *,
+    profile_id: str,
+    baseline_run_id: str,
+    content_id: str,
+    capture_command: str,
+) -> dict[str, Any]:
+    workflow = value.get("workflow_run")
+    job = value.get("job")
+    artifact = value.get("artifact")
+    if not all(isinstance(item, dict) for item in (workflow, job, artifact)):
+        raise ValueError("CI provenance is missing workflow, job, or artifact")
+    if value.get("profile_id") != profile_id:
+        raise ValueError("CI provenance profile does not match the baseline")
+    if value.get("baseline_run_id") != baseline_run_id:
+        raise ValueError("CI provenance run does not match the captured run")
+    if workflow.get("conclusion") != "success" or job.get("conclusion") != "success":
+        raise ValueError("CI reproduction did not succeed")
+    digest = artifact.get("digest")
+    if not isinstance(digest, str) or not digest.startswith("sha256:"):
+        raise ValueError("CI artifact digest must be SHA-256")
+    head_sha = workflow.get("head_sha")
+    if not isinstance(head_sha, str) or len(head_sha) != 40:
+        raise ValueError("CI repository commit is invalid")
     return {
-        "pair_id": row["pair_id"],
-        "status": row["status"],
-        "old_script_sha256": row.get("old_script", {}).get("sha256"),
-        "new_script_sha256": row.get("new_script", {}).get("sha256"),
-        "validator_identity": row.get("validator_identity"),
-        "compiler_pair": compiler_pair,
-        "abi": row.get("abi"),
-        "input_model": row.get("input_model"),
-        "domain_assumptions": row.get("domain_assumptions"),
-        "proof_obligations": row.get("proof_obligations"),
-        "theorem_hash": (
-            witness.get("theorem_hash")
-            if isinstance(witness, dict)
-            else row.get("proof_obligations", {})
-            .get("observational_equivalence", {})
-            .get("theorem_hash")
-        ),
-        "generated_lean_sha256": row.get("generated_lean_sha256"),
-        "solver_input_sha256": row.get("solver_input_sha256"),
-        "witness": witness,
-        "counterexample_replay": _compact_replay(
-            row.get("counterexample_replay"), run
-        ),
-        "evaluator": row.get("evaluator"),
-        "source_identity": source_identity,
+        "schema_version": 2,
+        "attestation_kind": "public_ci_reproduction",
+        "profile_id": profile_id,
+        "baseline_content_id": content_id,
+        "repository_commit": head_sha,
+        "workflow_revision": value.get("workflow_revision", head_sha),
+        "github_run_id": workflow.get("id"),
+        "job_id": job.get("id"),
+        "artifact_id": artifact.get("id"),
+        "artifact_sha256": digest.removeprefix("sha256:"),
+        "platform": value.get("platform", "ubuntu-24.04"),
+        "capture_command": capture_command,
+        "verification_result": "verified",
     }
 
 
@@ -201,184 +193,258 @@ def capture(
     run: Path,
     output: Path,
     identifier: str,
-    ci_provenance_path: Path,
+    ci_provenance_path: Path | None = None,
 ) -> None:
     run = run.expanduser().resolve()
     output = output.expanduser().resolve()
     profile = _profile(identifier)
     profile_result = _read(run / "profile-result.json")
-    if profile_result["profile_id"] != profile["id"]:
-        raise ValueError("profile result does not match the requested profile")
     summary = _read(run / "summary.json")
-    ci_provenance = _ci_provenance(
-        _read(ci_provenance_path.expanduser().resolve()),
-        profile_id=profile["id"],
-        baseline_run_id=summary["run_id"],
-    )
     run_record = _read(run / "run.json")
-    pair_records = _read(run / "pair-results.json")["records"]
-    builds = {label: _read(run / f"build-{label}.json") for label in ("old", "new")}
+    if profile_result.get("profile_id") != profile["id"]:
+        raise ValueError("profile result does not match the requested profile")
+    if not profile_result.get("profile_pass"):
+        raise ValueError("cannot capture a failing historical profile")
+    if not summary.get("source_immutable"):
+        raise ValueError("cannot capture a mutable source run")
+    source = run_record.get("source", {})
+    if source.get("dirty") is not False:
+        raise ValueError("canonical historical baseline source must be clean")
+
+    if output.exists():
+        if not output.is_dir():
+            raise ValueError(f"baseline output is not a directory: {output}")
+        for child in output.iterdir():
+            if not child.is_file():
+                raise ValueError(
+                    f"baseline output contains an unexpected directory: {child}"
+                )
+            child.unlink()
+    output.mkdir(parents=True, exist_ok=True)
+    record_files = {
+        "handler-pairs.ndjson": _records(run, "handler-pairs.json"),
+        "program-pairs.ndjson": _records(run, "program-pairs.json"),
+        "semantic-obligations.ndjson": _records(
+            run, "semantic-obligations.json"
+        ),
+        "obligation-results.ndjson": _records(run, "obligation-results.json"),
+        "validator-links.ndjson": _records(run, "validator-links.json"),
+        "feature-links.ndjson": _records(run, "feature-links.json"),
+    }
+    obligation_results = record_files["obligation-results.ndjson"]
+    record_files["evidence-lineage.ndjson"] = [
+        {
+            "evidence_result_id": row["evidence_result_id"],
+            "logical_obligation_id": row["logical_obligation_id"],
+            "program_pair_id": row["program_pair_id"],
+            "attempt_id": row["attempt_id"],
+            "reused": row.get("reused", False),
+            "evidence_reuse": row.get("evidence_reuse"),
+            "artifact_checksum": row.get("artifact_checksum"),
+        }
+        for row in obligation_results
+    ]
+    for filename, records in record_files.items():
+        _write_ndjson(output / filename, records)
 
     manifests: dict[str, dict[str, Any]] = {}
     for label in ("old", "new"):
-        manifest_path = Path(run_record["compiler_pair"][label]["provenance"]["manifest_path"])
+        manifest_path = Path(
+            run_record["compiler_pair"][label]["provenance"]["manifest_path"]
+        )
         manifests[label] = _manifest_record(manifest_path)
-    lock = _read(PROFILE_LOCK)["profiles"][profile["id"]]
     compiler_lock = {
-        "schema_version": 1,
-        "profile_lock": lock,
+        "schema_version": 2,
+        "profile_lock": _read(PROFILE_LOCK)["profiles"][profile["id"]],
         "compilers": manifests,
     }
+    builds = {
+        label: _read(run / f"build-{label}.json")
+        for label in ("old", "new")
+    }
     source_lock = {
-        "schema_version": 1,
+        "schema_version": 2,
         "fixture": profile["fixture"],
         "package": run_record["package"],
         "source_hash": run_record["source_hash"],
         "dependency_lock_hash": run_record["dependency_lock_hash"],
         "source_immutable": run_record["source_immutable"],
+        "source_provenance": _portable(source),
         "old_new_source_hash_equal": builds["old"]["source_hash_before"]
         == builds["new"]["source_hash_before"],
-        "old_new_dependency_lock_equal": builds["old"]["dependency_lock_hash_before"]
+        "old_new_dependency_lock_equal": builds["old"][
+            "dependency_lock_hash_before"
+        ]
         == builds["new"]["dependency_lock_hash_before"],
     }
-    first_pair = pair_records[0] if pair_records else {}
+    pair_results = _records(run, "pair-results.json")
     environment = {
-        "schema_version": 1,
+        "schema_version": 2,
         "blaster_configuration": run_record["blaster_configuration"],
         "checker_configuration": run_record["checker_configuration"],
-        "blaster_dependencies": first_pair.get("blaster_dependencies"),
-        "execution_environment": first_pair.get("execution_environment"),
+        "replay_trust": [
+            row.get("counterexample_replay", {}).get("replay_trust")
+            for row in pair_results
+            if isinstance(row.get("counterexample_replay"), dict)
+        ],
     }
-    source = run_record["source"]
-    source_provenance = {
-        "schema_version": 1,
-        "kind": source.get("kind"),
-        "repository_url": source.get("remote"),
-        "commit": source.get("commit"),
-        "dirty": source.get("dirty"),
-        "package_path": source.get("package_path"),
-        "source_identity": source.get("identity"),
-        "source_identity_fields": source.get("identity_fields"),
-        "source_hash": run_record["source_hash"],
-    }
-    compact_pairs = [_compact_pair(row, run) for row in pair_records]
-    status_counts: dict[str, int] = {}
-    for row in compact_pairs:
-        status_counts[row["status"]] = status_counts.get(row["status"], 0) + 1
-    counts = {
-        "total_generated_validator_pairs": len(compact_pairs),
-        "byte_identical_pairs": sum(
-            row["old_script_sha256"] == row["new_script_sha256"] for row in compact_pairs
-        ),
-        "non_identical_pairs": sum(
-            row["old_script_sha256"] != row["new_script_sha256"] for row in compact_pairs
-        ),
-        "strict_complete_equivalence_results": status_counts.get(
-            "equivalent_under_raw_model", 0
-        ),
-        "bounded_results": status_counts.get("bounded_equivalent", 0),
-        "inconclusive_results": sum(
-            count for status, count in status_counts.items() if "inconclusive" in status
-        ),
-        "confirmed_non_equivalent_results": status_counts.get(
-            "confirmed_non_equivalent", 0
-        ),
-    }
+    counts = dict(summary["counts"])
+    counts.update(
+        {
+            "handler_pair_records": len(record_files["handler-pairs.ndjson"]),
+            "program_pair_records": len(record_files["program-pairs.ndjson"]),
+            "semantic_obligation_records": len(
+                record_files["semantic-obligations.ndjson"]
+            ),
+            "obligation_result_records": len(obligation_results),
+        }
+    )
     compact_summary = {
-        "schema_version": 1,
-        "profile": {key: profile_result[key] for key in (
-            "profile_id",
-            "profile_name",
-            "semantic_status",
-            "semantic_statuses",
-            "profile_expectation",
-            "expectation_matched",
-            "semantic_strict_result",
-            "expected_strict_result",
-            "profile_pass",
-        )},
+        "schema_version": 2,
+        "profile": {
+            key: profile_result[key]
+            for key in (
+                "profile_id",
+                "profile_name",
+                "semantic_status",
+                "semantic_statuses",
+                "profile_expectation",
+                "expectation_matched",
+                "semantic_strict_result",
+                "expected_strict_result",
+                "profile_pass",
+            )
+        },
         "run_id": run_record["run_id"],
         "counts": counts,
-        "status_counts": status_counts,
+        "status_counts": summary["status_counts"],
+        "obligation_status_counts": summary["obligation_status_counts"],
         "strict_pass": summary["strict_pass"],
         "script_difference_observed": summary["script_difference_observed"],
+        "source_provenance": _portable(source),
         "gaps": summary["gaps"],
     }
-    feature_coverage = _read(run / "feature-coverage.json")
-    trigger_path = ROOT / profile["fixture"] / "codegen-triggers.json"
-    if trigger_path.is_file():
-        triggers = _read(trigger_path)
-        feature_coverage["historical_codegen_triggers"] = triggers["records"]
-        feature_coverage["historical_shared_feature_contract"] = triggers.get(
-            "shared_feature_contract"
-        )
-        feature_coverage["historical_coverage_claims"] = triggers.get(
-            "coverage_claims"
-        )
-
-    task_rows = []
-    for label, build in builds.items():
-        task_rows.append(
-            {
-                "task": f"build-{label}",
-                "compiler": _portable_compiler(build["compiler"]),
-                "source_hash_before": build["source_hash_before"],
-                "source_hash_after": build["source_hash_after"],
-                "source_unchanged": build["source_unchanged"],
-                "dependency_lock_hash_before": build["dependency_lock_hash_before"],
-                "dependency_lock_hash_after": build["dependency_lock_hash_after"],
-                "dependency_lock_unchanged": build["dependency_lock_unchanged"],
-                "blueprint_compatibility": build["blueprint_compatibility"],
-                "abi_inspection": build["abi_inspection"],
-                "primary_exit_code": build["primary_exit_code"],
-            }
-        )
-
-    files = {
-        "ci-provenance.json": ci_provenance,
+    json_files = {
         "compiler-lock.json": compiler_lock,
         "source-lock.json": source_lock,
         "environment.json": environment,
-        "feature-coverage.json": feature_coverage,
-        "source-provenance.json": source_provenance,
         "summary.json": compact_summary,
     }
-    for name, value in files.items():
-        _write(output / name, value)
+    for filename, value in json_files.items():
+        _write(output / filename, value)
     (output / "summary.md").write_text(
         _summary_markdown(compact_summary), encoding="utf-8"
     )
-    (output / "task-results.ndjson").write_text(
-        "".join(json.dumps(row, sort_keys=True) + "\n" for row in task_rows),
-        encoding="utf-8",
+    task_rows = [
+        {
+            "task": f"build-{label}",
+            "compiler": _portable(build["compiler"]),
+            "source_hash_before": build["source_hash_before"],
+            "source_hash_after": build["source_hash_after"],
+            "source_unchanged": build["source_unchanged"],
+            "dependency_lock_hash_before": build["dependency_lock_hash_before"],
+            "dependency_lock_hash_after": build["dependency_lock_hash_after"],
+            "dependency_lock_unchanged": build["dependency_lock_unchanged"],
+            "primary_exit_code": build["primary_exit_code"],
+        }
+        for label, build in builds.items()
+    ]
+    _write_ndjson(output / "task-results.ndjson", task_rows)
+
+    checksummed_files = sorted(
+        child.name
+        for child in output.iterdir()
+        if child.is_file()
+        and child.name not in {"checksums.json", "ci-attestation.json"}
     )
-    (output / "pair-results.ndjson").write_text(
-        "".join(json.dumps(row, sort_keys=True) + "\n" for row in compact_pairs),
-        encoding="utf-8",
+    checksums = {name: _sha256(output / name) for name in checksummed_files}
+    content_id = _identity(
+        "baseline-content",
+        {
+            "schema_version": 2,
+            "algorithm": "sha256",
+            "files": checksums,
+        },
     )
-    artifact_names = sorted(
-        [*files, "summary.md", "task-results.ndjson", "pair-results.ndjson"]
+    _write(
+        output / "checksums.json",
+        {
+            "schema_version": 2,
+            "algorithm": "sha256",
+            "baseline_content_id": content_id,
+            "files": checksums,
+        },
     )
-    checksums = {
-        "schema_version": 1,
-        "algorithm": "sha256",
-        "files": {name: _sha256(output / name) for name in artifact_names},
-    }
-    _write(output / "checksums.json", checksums)
+    capture_command = (
+        "python scripts/capture_historical_baseline.py "
+        f"--profile {profile['id']} --run {run_record['run_id']} "
+        f"--output results/baselines/{profile['id']} "
+        "--ci-provenance ci-provenance.json"
+    )
+    if ci_provenance_path is not None:
+        attestation = _ci_attestation(
+            _read(ci_provenance_path.expanduser().resolve()),
+            profile_id=profile["id"],
+            baseline_run_id=run_record["run_id"],
+            content_id=content_id,
+            capture_command=capture_command,
+        )
+        _write(output / "ci-attestation.json", attestation)
+
+
+def attach_attestation(
+    baseline: Path,
+    identifier: str,
+    ci_provenance_path: Path,
+) -> None:
+    baseline = baseline.expanduser().resolve()
+    profile = _profile(identifier)
+    checksums = _read(baseline / "checksums.json")
+    summary = _read(baseline / "summary.json")
+    if checksums.get("schema_version") != 2:
+        raise ValueError("baseline checksums must use schema_version 2")
+    content_id = checksums.get("baseline_content_id")
+    run_id = summary.get("run_id")
+    if not isinstance(content_id, str) or not isinstance(run_id, str):
+        raise ValueError("baseline is missing its content ID or run ID")
+    capture_command = (
+        "python scripts/capture_historical_baseline.py "
+        f"--profile {profile['id']} --run {run_id} "
+        f"--output results/baselines/{profile['id']}"
+    )
+    attestation = _ci_attestation(
+        _read(ci_provenance_path.expanduser().resolve()),
+        profile_id=profile["id"],
+        baseline_run_id=run_id,
+        content_id=content_id,
+        capture_command=capture_command,
+    )
+    _write(baseline / "ci-attestation.json", attestation)
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="capture a compact historical profile baseline")
-    parser.add_argument("--profile", required=True)
-    parser.add_argument("--run", type=Path, required=True)
-    parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument(
-        "--ci-provenance",
-        type=Path,
-        required=True,
-        help="JSON record for the successful public CI reproduction",
+    parser = argparse.ArgumentParser(
+        description="capture or attest a compact schema-version-2 historical baseline"
     )
+    parser.add_argument("--profile", required=True)
+    parser.add_argument("--run", type=Path)
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--baseline", type=Path)
+    parser.add_argument("--ci-provenance", type=Path)
     args = parser.parse_args()
+    if args.baseline is not None:
+        if args.run is not None or args.output is not None:
+            parser.error("--baseline cannot be combined with --run or --output")
+        if args.ci_provenance is None:
+            parser.error("--baseline requires --ci-provenance")
+        attach_attestation(
+            args.baseline,
+            args.profile,
+            args.ci_provenance,
+        )
+        return 0
+    if args.run is None or args.output is None:
+        parser.error("capture requires --run and --output")
     capture(
         args.run,
         args.output,

@@ -127,6 +127,23 @@ uv run equiv-checker corpus run ../corpus/aiken_mandatory_corpus.lock.json \
   --resume
 ```
 
+Gate a clean or dirty local compiler candidate through release provenance,
+the complete sentinel, and every mandatory corpus task:
+
+```bash
+uv run equiv-checker candidate gate \
+  --base-compiler-manifest ../.ak-equiv/compilers/base/compiler.json \
+  --candidate-compiler-manifest ../.ak-equiv/compilers/candidate/compiler.json \
+  --feature-contract ../corpus/aiken_language_features_v1_1_23.json \
+  --corpus-lock ../corpus/aiken_mandatory_corpus.lock.json \
+  --scope sentinel,mandatory \
+  --resume \
+  --policy strict
+```
+
+Dirty candidates still run semantic checks, but the release decision is
+fail-closed and labels their evidence `development_only`.
+
 Normal package comparisons support `--resume` and `--force`. Corpus runs additionally support repeatable `--only SOURCE_OR_TARGET`, cached `--only-pair PAIR_ID`, and deterministic `--shard-index N --shard-count M`.
 
 Capture a compact, relocatable baseline after both runs:
@@ -191,11 +208,29 @@ not_applicable
 
 Missing locks or evidence, bounded results, unsupported models or purposes, non-vacuity failures, preparation exhaustion, timeouts, solver errors, malformed witnesses, unreplayed falsifications, compatibility changes, and confirmed differences all fail closed.
 
-## Counterexample protocol and replay
+## Result, witness, and replay protocols
 
-Lean emits exactly one versioned `EQUIV_RESULT_V1` JSON marker bound to the pair ID and theorem hash. The adapter rejects missing, duplicate, malformed, unknown, identity-mismatched, and exit-code-conflicting markers.
+Every solver verdict uses one strict-schema `EQUIV_RESULT_V2` JSON marker. It
+binds the program pair, logical obligation, semantic model, checker
+configuration, both script hashes, verified ABI, obligation kind, theorem
+statement, generated-source schema, and solver status. Missing, duplicate,
+malformed, unknown, mismatched, or exit-code-conflicting markers are rejected.
 
-Structured witnesses cover integers, bytes, booleans, Plutus data constructors, lists, maps, validator parameters, and raw script-context data. A falsified validator is initially `blaster_falsified_unreplayed`. The pinned Aiken v1.1.23 `uplc eval --cbor` evaluator then executes the old and new serialized scripts with identical encoded arguments and limits. Only different independent observations produce `confirmed_non_equivalent`.
+`EQUIV_WITNESS_V2` is the native machine-witness protocol. It binds the same
+pair, obligation, theorem, and model to ordered names, types, structured
+values, serialized UPLC terms, domain evidence, and a witness checksum.
+Unsupported values, lossy serialization, wrong order or arity, domain
+violations, duplicate markers, and conflicting witnesses are rejected. The
+pinned upstream fallback is explicitly labeled
+`witness_source = legacy_human_parser`; every fallback value is reserialized
+and concretely replayed before it can confirm a difference.
+
+Replay records configured, effective, evaluator-enforced, externally enforced,
+and unenforced limits separately. The separately pinned Aiken evaluator is a
+separate binary and separate from the symbolic model, but it is not a distinct
+UPLC implementation; agreement is therefore `single_evaluator_confirmed`.
+A configured distinct second backend can raise replay confidence to
+`cross_evaluator_confirmed` without changing the semantic verdict.
 
 ## Corpus execution
 
@@ -217,28 +252,58 @@ negative-diagnostic
 
 Compile-only, benchmark, configuration, and documentation targets do not require validators. Every task records old/new results, expected outcome, classification, logs, hashes, timeout, source immutability, and strict policy.
 
-## Evidence and resume
+## Evidence identity, reuse, and bundles
 
-Logical identities exclude absolute paths, host names, timestamps, temporary directories, and strict-mode policy. Completed comparison bundles are never deleted implicitly. `--resume` validates schemas and every individual pair result before reuse. `--force` preserves the previous bundle under `work/attempts/<run-id>/<sequence>/`.
+Program artifacts are identified by serialized bytes, Plutus version, and
+serialization format. Program pairs add the ordered old/new artifact IDs and
+verified ABI ID. Semantic models bind variable types, argument order, arity,
+domain and assumptions, observation, semantic runtime bound, and any
+purpose-specific ledger predicate. Logical obligations combine a program pair,
+semantic model, and explicit obligation kind. Checker configurations bind the
+Lean, Blaster, importer, preparer, ledger-model, and Z3 revisions and solver
+configuration. Attempts additionally bind seed, process and solver timeouts,
+platform, and attempt sequence. Policy is a decision over this evidence, not
+part of its logical identity.
 
-Each comparison bundle contains:
+Absolute paths, host names, timestamps, temporary directories, handler titles,
+and strict policy do not affect semantic identity. `--resume` accepts cached
+evidence only when the obligation, checker, script hashes, ABI, model,
+generated-source schema, generated Lean checksum, and sealed artifact checksum
+all validate. `--force` preserves the previous bundle under
+`work/attempts/<run-id>/<sequence>/`.
+
+Comparison bundles contain separate validator, handler-pair, program-pair,
+semantic-obligation, obligation-result, validator-link, and feature-link
+records. Multiple blueprint handlers may link to one raw UPLC obligation;
+purpose-specific ledger domains remain distinct.
+
+Candidate gates emit:
 
 ```text
-run.json
-build-old.json
-build-new.json
-script-pairs.json
-pair-results.json
-pairs/<pair-id>/result.json
-feature-coverage.json
-summary.json
-summary.md
-logs/
-generated-lean/
-counterexamples/
+release-decision.json
+release-decision.md
+program-pairs.json
+semantic-obligations.json
+obligation-results.json
+validator-links.json
+feature-links.json
+task-results.json
+evidence-lineage.json
+environment.json
+checksums.json
 ```
 
-Corpus runs store one `result.json` per stable task. Compact committed historical baselines live under `results/baselines/historical-equivalent-v1.1.21-v1.1.22/` and `results/baselines/historical-regression-v1.1.22-v1.1.23/`; large compiler logs, generated Lean, SMT files, evaluator logs, binaries, and complete bundles remain CI artifacts.
+Schema-version-2 historical baselines live under `results/baselines/`.
+Validate their complete checksums, parent lineage, clean source provenance,
+content identity, and public CI attestation with:
+
+```bash
+uv run equiv-checker baseline verify \
+  ../results/baselines/historical-equivalent-v1.1.21-v1.1.22
+```
+
+Large compiler logs, generated Lean, SMT files, evaluator logs, binaries, and
+complete run bundles remain CI artifacts.
 
 ## Verification and CI
 
@@ -249,6 +314,15 @@ cd tool
 uv run python -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
-The real suite covers released compiler builds, exact-byte equality, non-identical strict equivalence with separate completion obligations, validator-shaped structured falsification, independent CEK replay, local clean and dirty compiler provenance, and fail-closed classifications.
+The real suite covers released compiler builds, exact-byte equality,
+non-identical strict equivalence with separate completion obligations,
+validator-shaped structured falsification, concrete CEK replay, local clean
+and dirty compiler provenance, and fail-closed classifications.
 
-CI is split by cost and trust boundary. Pull requests run unit, schema, and fake-tool tests without downloading toolchains. Nightly and manually dispatched jobs separately run the released positive profile, released negative profile, and clean local-compiler build smoke; every job uploads its complete evidence bundle. The existing real smoke and manually selected corpus gates remain separate.
+CI is split by cost and trust boundary. Pull requests run unit, schema,
+identity, protocol-tamper, cache-poisoning, deduplication, report-invariant,
+baseline-attestation, and fake-tool tests. Scheduled and main-branch jobs
+separately run the released positive and negative profiles, a real changed-
+output local v1.1.22 candidate against the v1.1.21 base, and a current
+same-source local smoke. All actions are full-SHA pinned and evidence jobs
+upload complete bundles.

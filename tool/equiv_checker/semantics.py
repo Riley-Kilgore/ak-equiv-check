@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .models import InputModel, ScriptPair
+from .models import InputModel, ProgramPairRecord
 
 
 EQUIVALENCE_FORMULA = (
@@ -48,62 +48,59 @@ def _raw_data_witness(names: tuple[str, ...]) -> dict[str, object]:
     }
 
 
-def _raw_argument_names(pair: ScriptPair) -> tuple[str, ...]:
-    abi = pair.abi
-    if (
-        abi.get("verified") is True
-        and abi.get("equal") is True
-        and isinstance(abi.get("old"), dict)
-    ):
-        order = abi["old"].get("argument_order")
-        if isinstance(order, list) and all(isinstance(name, str) for name in order):
-            return tuple(order)
-    parameters = tuple(f"parameter{index}" for index, _ in enumerate(pair.parameters))
-    normalized = pair.plutus_version.lower().removeprefix("plutus").removeprefix("v")
-    if normalized == "3":
-        return parameters + ("script_context_data",)
-    if pair.purpose == "spending":
-        return parameters + ("datum_data", "redeemer_data", "script_context_data")
-    if pair.purpose in {"minting", "rewarding", "certifying"}:
-        return parameters + ("redeemer_data", "script_context_data")
-    return parameters
+def _raw_argument_names(pair: ProgramPairRecord) -> tuple[str, ...]:
+    abi = pair.verified_abi
+    if abi.get("status") != "verified":
+        return ()
+    order = abi.get("argument_order")
+    if not isinstance(order, list) or not all(isinstance(name, str) for name in order):
+        return ()
+    return tuple(order)
 
 
-def raw_validator_input_model(pair: ScriptPair) -> InputModel:
+def _parameter_count(pair: ProgramPairRecord) -> int:
+    value = pair.verified_abi.get("applied_parameter_count")
+    return value if isinstance(value, int) and value >= 0 else 0
+
+
+def _pair_purposes(pair: ProgramPairRecord) -> tuple[str, ...]:
+    return tuple(
+        sorted(
+            {
+                str(reference["purpose"])
+                for reference in pair.handler_references
+                if isinstance(reference.get("purpose"), str)
+            }
+        )
+    )
+
+
+def raw_validator_input_model(pair: ProgramPairRecord) -> InputModel:
     names = _raw_argument_names(pair)
     abi_verified = (
-        not pair.abi
-        or pair.abi.get("verified") is True
-        and pair.abi.get("equal") is True
+        pair.verified_abi.get("status") == "verified"
+        and bool(pair.verified_abi_id)
     )
+    arity = pair.verified_abi.get("top_level_callable_arity")
     supported = (
-        bool(names)
-        and abi_verified
-        and not (
-            pair.plutus_version.lower() not in {"v3", "3", "plutusv3"}
-            and pair.purpose in {"fallback", "voting", "proposing"}
-        )
+        abi_verified
+        and isinstance(arity, int)
+        and arity >= 0
+        and len(names) == arity
     )
-    reason = None
-    if not abi_verified:
-        reason = "old and new compiled UPLC ABIs are not verified and equal"
-    elif not supported:
-        reason = (
-            "fallback or governance arity is not uniquely defined for pre-V3 compiled scripts"
-            if pair.purpose in {"fallback", "voting", "proposing"}
-            else "the compiled raw UPLC arity is unknown"
-        )
+    reason = None if supported else "raw_model_not_bound_to_abi"
     variables = tuple({"name": name, "type": "Data"} for name in names)
+    parameter_count = _parameter_count(pair)
     components: list[str] = []
-    if pair.parameters:
+    if parameter_count:
         components.append("validator_parameters")
-    components.extend(name.removesuffix("_data") for name in names[len(pair.parameters) :])
+    components.extend(name.removesuffix("_data") for name in names[parameter_count:])
     return InputModel(
         kind="validator_raw",
         profile=RAW_UPLC_PROFILE,
-        version="1",
+        version="2",
         plutus_version=pair.plutus_version,
-        purpose=pair.purpose,
+        purpose="raw",
         variables=variables,
         quantified_components=tuple(components),
         argument_order=names,
@@ -111,7 +108,7 @@ def raw_validator_input_model(pair: ScriptPair) -> InputModel:
         domain_expression="True",
         domain_assumptions=(
             "Every argument ranges over all Plutus Data, including malformed values for the Aiken schema.",
-            "The argument order is the exact compiled UPLC interface after validator parameters.",
+            "The argument order is bound to the verified compiled UPLC interface.",
             "No Cardano ledger validity predicate restricts the raw domain.",
             "Success and explicit CEK failure are logical observations; cost and trace are evidence only.",
             "Runtime-step-bound exhaustion is distinct from validator failure.",
@@ -129,44 +126,68 @@ def raw_validator_input_model(pair: ScriptPair) -> InputModel:
     )
 
 
-def ledger_validator_input_model(pair: ScriptPair) -> InputModel:
+def ledger_validator_input_model(
+    pair: ProgramPairRecord, purpose: str | None = None
+) -> InputModel:
+    purposes = _pair_purposes(pair)
+    selected_purpose = purpose or (purposes[0] if len(purposes) == 1 else "fallback")
+    if selected_purpose not in purposes and purpose is not None:
+        raise ValueError(
+            f"purpose {selected_purpose} is not linked to program pair {pair.program_pair_id}"
+        )
     normalized = pair.plutus_version.lower().removeprefix("plutus").removeprefix("v")
-    supported = pair.purpose in _PURPOSE_STEMS and (
-        normalized == "3" or pair.purpose in _LEDGER_INPUT_TYPES
+    supported = selected_purpose in _PURPOSE_STEMS and (
+        normalized == "3" or selected_purpose in _LEDGER_INPUT_TYPES
     )
     reason = None
-    if pair.purpose == "fallback":
+    if selected_purpose == "fallback":
         reason = "an else handler has no single ledger purpose; raw-uplc covers every encoded V3 purpose"
     elif not supported:
-        reason = f"ledger-valid model is unavailable for {pair.purpose} under Plutus V{normalized}"
-
+        reason = (
+            f"ledger-valid model is unavailable for {selected_purpose} "
+            f"under Plutus V{normalized}"
+        )
+    parameter_count = _parameter_count(pair)
     parameters = tuple(
         {"name": f"parameter{index}", "type": "Data"}
-        for index, _ in enumerate(pair.parameters)
+        for index in range(parameter_count)
     )
-    input_type = "ScriptContext" if normalized == "3" else _LEDGER_INPUT_TYPES.get(pair.purpose, "ScriptContext")
+    input_type = (
+        "ScriptContext"
+        if normalized == "3"
+        else _LEDGER_INPUT_TYPES.get(selected_purpose, "ScriptContext")
+    )
     variables = parameters + ({"name": "ledger_input", "type": input_type},)
-    if normalized == "3" and pair.purpose in _PURPOSE_STEMS:
-        stem = _PURPOSE_STEMS[pair.purpose]
+    if normalized == "3" and selected_purpose in _PURPOSE_STEMS:
+        stem = _PURPOSE_STEMS[selected_purpose]
         domain = f"validScriptContext ledger_input && is{stem}ScriptInfo ledger_input"
-    elif pair.purpose in _PURPOSE_STEMS:
-        domain = f"valid{_PURPOSE_STEMS[pair.purpose]}Context ledger_input"
+    elif selected_purpose in _PURPOSE_STEMS:
+        domain = f"valid{_PURPOSE_STEMS[selected_purpose]}Context ledger_input"
     else:
         domain = "False"
     order = tuple(row["name"] for row in variables)
     return InputModel(
         kind="validator_ledger",
         profile=LEDGER_VALID_PROFILE,
-        version="1",
+        version="2",
         plutus_version=pair.plutus_version,
-        purpose=pair.purpose,
+        purpose=selected_purpose,
         variables=variables,
         quantified_components=(
-            *(("validator_parameters",) if pair.parameters else ()),
+            *(("validator_parameters",) if parameter_count else ()),
             "purpose_specific_ledger_input",
         ),
         argument_order=order,
-        arity=(len(pair.parameters) + (1 if normalized == "3" else 3 if pair.purpose == "spending" else 2)),
+        arity=(
+            parameter_count
+            + (
+                1
+                if normalized == "3"
+                else 3
+                if selected_purpose == "spending"
+                else 2
+            )
+        ),
         domain_expression=domain,
         domain_assumptions=(
             "The purpose-specific CardanoLedgerApiBlaster conversion supplies the compiled argument order.",
@@ -186,12 +207,23 @@ def ledger_validator_input_model(pair: ScriptPair) -> InputModel:
     )
 
 
-def validator_input_models(pair: ScriptPair) -> tuple[InputModel, InputModel]:
-    return raw_validator_input_model(pair), ledger_validator_input_model(pair)
+def ledger_validator_input_models(
+    pair: ProgramPairRecord,
+) -> tuple[InputModel, ...]:
+    return tuple(
+        ledger_validator_input_model(pair, purpose)
+        for purpose in _pair_purposes(pair)
+    )
 
 
-def validator_input_model(pair: ScriptPair) -> InputModel:
-    """Return the mandatory primary model retained for existing callers."""
+def validator_input_models(
+    pair: ProgramPairRecord,
+) -> tuple[InputModel, tuple[InputModel, ...]]:
+    return raw_validator_input_model(pair), ledger_validator_input_models(pair)
+
+
+def validator_input_model(pair: ProgramPairRecord) -> InputModel:
+    """Return the mandatory raw model."""
     return raw_validator_input_model(pair)
 
 

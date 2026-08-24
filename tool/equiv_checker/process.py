@@ -31,7 +31,7 @@ class ProcessResult:
     stderr: str
     duration_seconds: float
     timed_out: bool
-
+    process_group_termination_succeeded: bool | None = None
     def to_dict(self, *, include_output: bool = False) -> dict[str, object]:
         result = asdict(self)
         if not include_output:
@@ -85,17 +85,22 @@ def run_process(
         **popen_options,
     )
     timed_out = False
+    process_group_termination_succeeded: bool | None = None
     try:
         stdout, stderr = process.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
         timed_out = True
         if os.name == "nt":
             process.kill()
+            process_group_termination_succeeded = True
         else:
             try:
                 os.killpg(process.pid, signal.SIGKILL)
+                process_group_termination_succeeded = True
             except ProcessLookupError:
-                pass
+                process_group_termination_succeeded = True
+            except OSError:
+                process_group_termination_succeeded = False
         stdout, stderr = process.communicate()
     return ProcessResult(
         command=argv,
@@ -105,6 +110,7 @@ def run_process(
         stderr=stderr,
         duration_seconds=round(time.monotonic() - started, 6),
         timed_out=timed_out,
+        process_group_termination_succeeded=process_group_termination_succeeded,
     )
 
 

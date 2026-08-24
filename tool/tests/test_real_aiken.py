@@ -28,13 +28,20 @@ class RealAikenGoldenTests(unittest.TestCase):
                 ),
             )
             self.assertTrue(summary["strict_pass"])
-            self.assertEqual(summary["counts"]["validators_paired"], 2)
+            self.assertEqual(summary["counts"]["handler_pairs"], 2)
             pairs = json.loads(
-                (Path(summary["output"]) / "script-pairs.json").read_text()
+                (Path(summary["output"]) / "program-pairs.json").read_text()
             )["records"]
-            parameterized = [row for row in pairs if row["parameters"]]
-            self.assertEqual(len(parameterized), 2)
-            self.assertIn("minting", {row["purpose"] for row in parameterized})
+            parameterized = [
+                row
+                for row in pairs
+                if row["verified_abi"]["parameter_schemas"]
+            ]
+            self.assertTrue(parameterized)
+            links = json.loads(
+                (Path(summary["output"]) / "validator-links.json").read_text()
+            )["records"]
+            self.assertIn("minting", {row["purpose"] for row in links})
 
     def test_checked_sentinel_blueprint_contains_real_spending_purpose(self) -> None:
         validators = discover_validators(REPOSITORY_ROOT / "sentinel" / "plutus.json")

@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "releases": {
+    "v1.1.23": {
+      "stable": {
+        "canonical_upstream_repository": "https://github.com/aiken-lang/aiken",
+        "release_tag": "v1.1.23",
+        "annotated_tag_object": "5615d985a9dfce1e7012c437667e2773604342fc",
+        "tag_target_type": "annotated_tag",
+        "resolved_commit_sha": "8949565a9969278846ffefe30bc3b892029dd318",
+        "git_tree_sha": "35f8350b88fa909fa0d1e9a807d2ffae8e1bc627",
+        "source_tree_sha256": "985516c89f7b7bde3c29dc18b96b7e68e7bdbd0ca3a102bb37d0804a00afe06c",
+        "cargo_lock_sha256": "936cea60d61331474f779bcfacd15dfcc4d900f1838f6a15ceacc57e2de4153b",
+        "reported_aiken_version": "aiken v1.1.23+8949565",
+        "required_rust_version": "1.94.1",
+        "build_command_class": ["cargo", "build", "--release", "--locked"]
+      },
+      "platform_artifacts": {
+        "darwin-arm64-aarch64-apple-darwin": {
+          "platform": "darwin",
+          "architecture": "arm64",
+          "target_triple": "aarch64-apple-darwin",
+          "binary_sha256": "6685b016a98cb7a494ed1a4b2a4ad804bae7e54605a6a17c9cd50da3c9e05d31",
+          "compiler_artifact_id": "125aae877b0a5c9638315191e9fdde8019a984983e43c73de795f0594c1914a1"
+        }
+      }
+    }
+  }
+}

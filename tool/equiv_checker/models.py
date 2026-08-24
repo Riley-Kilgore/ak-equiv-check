@@ -4,6 +4,16 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
+from .evidence import (
+    attempt_id,
+    checker_configuration_id,
+    checker_configuration_payload,
+    logical_obligation_id,
+    platform_identity,
+    program_artifact_id,
+    semantic_model_id,
+)
+
 
 FINAL_STATUSES = frozenset(
     {
@@ -34,6 +44,11 @@ FINAL_STATUSES = frozenset(
         "old_uplc_extraction_failed",
         "new_uplc_extraction_failed",
         "old_blueprint_missing",
+        "old_raw_abi_unresolved",
+        "new_raw_abi_unresolved",
+        "raw_abi_mismatch",
+        "raw_abi_parser_error",
+        "raw_model_not_bound_to_abi",
         "new_blueprint_missing",
         "old_blueprint_malformed",
         "new_blueprint_malformed",
@@ -45,6 +60,17 @@ FINAL_STATUSES = frozenset(
         "compiled_abi_unverified",
         "compiled_abi_mismatch",
         "validator_missing_old",
+        "pair_identical",
+        "pair_complete_equivalent",
+        "pair_bounded_equivalent",
+        "pair_confirmed_non_equivalent",
+        "pair_inconclusive",
+        "pair_unsupported",
+        "pair_missing",
+        "old_reachability_failed",
+        "new_reachability_failed",
+        "feature_old_only",
+        "feature_new_only",
         "validator_missing_new",
         "validator_signature_changed",
         "adapter_failed",
@@ -64,6 +90,8 @@ STRICT_PASSING_STATUSES = frozenset(
         "equivalent_under_raw_model",
         "expected_negative_diagnostic",
         "not_applicable",
+        "pair_identical",
+        "pair_complete_equivalent",
     }
 )
 
@@ -99,6 +127,10 @@ class EvaluatorConfig:
     binary_sha256: str
     executable: Path
     evaluation_limits: dict[str, Any]
+    backend_kind: str = "aiken"
+    separately_pinned: bool = True
+    distinct_uplc_implementation: bool = False
+    supported_limit_flags: tuple[str, ...] = ()
 
     def identity(self) -> dict[str, Any]:
         return {
@@ -107,6 +139,10 @@ class EvaluatorConfig:
             "revision": self.revision,
             "binary_sha256": self.binary_sha256,
             "evaluation_limits": self.evaluation_limits,
+            "backend_kind": self.backend_kind,
+            "separately_pinned": self.separately_pinned,
+            "distinct_uplc_implementation": self.distinct_uplc_implementation,
+            "supported_limit_flags": list(self.supported_limit_flags),
         }
 
 
@@ -123,19 +159,32 @@ class BlasterConfig:
     timeouts: Timeouts
     random_seed: int = 1
     evaluator: EvaluatorConfig | None = None
+    secondary_evaluator: EvaluatorConfig | None = None
+
+    def checker_configuration(self) -> dict[str, Any]:
+        payload = checker_configuration_payload(
+            lean_version=self.lean_version,
+            revisions=self.revisions,
+            z3_version=self.z3_version,
+            solver=self.solver,
+            solver_binary_sha256=self.solver_binary_sha256,
+            solver_configuration={"fuel_semantics": "maximum CEK transitions per concrete modeled input"},
+        )
+        return payload | {
+            "checker_configuration_id": checker_configuration_id(payload)
+        }
 
     def identity(self) -> dict[str, Any]:
         return {
-            "revisions": dict(sorted(self.revisions.items())),
-            "lean_version": self.lean_version,
-            "z3_version": self.z3_version,
-            "solver": self.solver,
-            "solver_binary_sha256": self.solver_binary_sha256,
-            "runtime_step_bound": self.runtime_step_bound,
+            **self.checker_configuration(),
+            "semantic_runtime_step_bound": self.runtime_step_bound,
             "fuel_semantics": "maximum CEK transitions per concrete modeled input",
             "timeouts": asdict(self.timeouts),
             "random_seed": self.random_seed,
             "evaluator": self.evaluator.identity() if self.evaluator else None,
+            "secondary_evaluator": (
+                self.secondary_evaluator.identity() if self.secondary_evaluator else None
+            ),
         }
 
 
@@ -145,39 +194,103 @@ class ScriptArtifact:
     relative_path: str
     sha256: str
     size: int
+    plutus_version: str = "v3"
+    serialization_format: str = "single_cbor_hex"
+    compiler_artifact_id: str = "unbound"
+    source_validator_references: tuple[str, ...] = ()
+    program_artifact_id: str = ""
+
+    def __post_init__(self) -> None:
+        if self.program_artifact_id:
+            return
+        serialized = bytes.fromhex(self.path.read_text(encoding="ascii").strip())
+        object.__setattr__(
+            self,
+            "program_artifact_id",
+            program_artifact_id(
+                serialized,
+                self.plutus_version,
+                self.serialization_format,
+            ),
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "program_artifact_id": self.program_artifact_id,
             "path": self.relative_path,
-            "sha256": self.sha256,
-            "size": self.size,
-            "encoding": "single_cbor_hex",
+            "script_sha256": self.sha256,
+            "script_size": self.size,
+            "serialization_format": self.serialization_format,
+            "plutus_version": self.plutus_version,
+            "source_validator_references": list(self.source_validator_references),
+            "compiler_artifact_id": self.compiler_artifact_id,
         }
 
 
 @dataclass(frozen=True)
-class ScriptPair:
-    pair_id: str
-    validator_identity: dict[str, Any]
+class ValidatorRecord:
+    validator_record_id: str
+    repository: str
+    package: str
+    module: str
+    validator: str
+    handler_title: str
+    purpose: str
+    parameter_schemas: tuple[dict[str, Any], ...]
+    datum_schema: dict[str, Any] | None
+    redeemer_schema: dict[str, Any] | None
+    blueprint_reference: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class HandlerPairRecord:
+    handler_pair_id: str
+    repository: str
+    package: str
+    module: str
+    validator: str
+    handler_title: str
+    purpose: str
+    parameter_schemas: tuple[dict[str, Any], ...]
+    datum_schema: dict[str, Any] | None
+    redeemer_schema: dict[str, Any] | None
+    old_blueprint_reference: dict[str, Any]
+    new_blueprint_reference: dict[str, Any]
+    old_validator_record_id: str
+    new_validator_record_id: str
+    program_pair_id: str | None
+    feature_ids: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class ProgramPairRecord:
+    program_pair_id: str
     old_script: ScriptArtifact
     new_script: ScriptArtifact
-    purpose: str
-    parameters: tuple[dict[str, Any], ...]
+    verified_abi_id: str
+    verified_abi: dict[str, Any]
+    plutus_version: str
+    handler_pair_ids: tuple[str, ...]
+    handler_references: tuple[dict[str, Any], ...]
     covered_feature_ids: tuple[str, ...] = ()
-    plutus_version: str = "v3"
-    abi: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "pair_id": self.pair_id,
-            "validator_identity": self.validator_identity,
-            "old_script": self.old_script.to_dict(),
-            "new_script": self.new_script.to_dict(),
-            "purpose": self.purpose,
-            "parameters": list(self.parameters),
-            "covered_feature_ids": list(self.covered_feature_ids),
+            "program_pair_id": self.program_pair_id,
+            "old_program_artifact": self.old_script.to_dict(),
+            "new_program_artifact": self.new_script.to_dict(),
+            "verified_abi_id": self.verified_abi_id,
+            "verified_abi": self.verified_abi,
             "plutus_version": self.plutus_version,
-            "abi": self.abi,
+            "handler_pair_ids": list(self.handler_pair_ids),
+            "handler_references": list(self.handler_references),
+            "covered_feature_ids": list(self.covered_feature_ids),
         }
 
 
@@ -220,6 +333,75 @@ class InputModel:
             "unsupported_reason": self.unsupported_reason,
         }
 
+    def semantic_model_id(self, semantic_runtime_bound: int) -> str:
+        return semantic_model_id(self.to_dict(), semantic_runtime_bound)
+
+
+@dataclass(frozen=True)
+class SemanticObligationRecord:
+    logical_obligation_id: str
+    program_pair_id: str
+    semantic_model_id: str
+    obligation_kind: str
+    semantic_runtime_bound: int
+    input_model: dict[str, Any]
+
+    @classmethod
+    def create(
+        cls,
+        pair: ProgramPairRecord,
+        model: InputModel,
+        obligation_kind: str,
+        semantic_runtime_bound: int,
+    ) -> SemanticObligationRecord:
+        model_id = model.semantic_model_id(semantic_runtime_bound)
+        return cls(
+            logical_obligation_id=logical_obligation_id(
+                pair.program_pair_id, model_id, obligation_kind
+            ),
+            program_pair_id=pair.program_pair_id,
+            semantic_model_id=model_id,
+            obligation_kind=obligation_kind,
+            semantic_runtime_bound=semantic_runtime_bound,
+            input_model=model.to_dict(),
+        )
+
+    def attempt_id(
+        self,
+        config: BlasterConfig,
+        attempt_sequence: int,
+        *,
+        platform: dict[str, Any] | None = None,
+    ) -> str:
+        return attempt_id(
+            logical_obligation_id_value=self.logical_obligation_id,
+            checker_configuration_id_value=config.checker_configuration()[
+                "checker_configuration_id"
+            ],
+            random_seed=config.random_seed,
+            solver_timeout=config.timeouts.z3,
+            process_timeouts=asdict(config.timeouts),
+            platform_identity_value=platform or platform_identity(),
+            attempt_sequence=attempt_sequence,
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class FeatureEvidenceLink:
+    feature_id: str
+    handler_pair_ids: tuple[str, ...]
+    program_pair_ids: tuple[str, ...]
+    logical_obligation_ids: tuple[str, ...]
+    authoritative_evidence_ids: tuple[str, ...]
+    required_evidence_ids: tuple[str, ...]
+    aggregate_result: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
 
 @dataclass
 class BlasterResult:
@@ -249,12 +431,17 @@ class BlasterResult:
 class BlasterBackend(Protocol):
     config: BlasterConfig
 
-    def compare(self, pair: ScriptPair, input_model: InputModel, output_root: Path) -> BlasterResult:
+    def compare(
+        self,
+        pair: ProgramPairRecord,
+        input_model: InputModel,
+        output_root: Path,
+    ) -> BlasterResult:
         ...
 
     def replay(
         self,
-        pair: ScriptPair,
+        pair: ProgramPairRecord,
         input_model: InputModel,
         witness: dict[str, Any],
         output_root: Path,

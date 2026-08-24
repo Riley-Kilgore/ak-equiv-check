@@ -4,6 +4,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from .baseline import verify_baseline
 
 from .config import (
     BLASTER_CONFIG_PATH,
@@ -11,6 +12,11 @@ from .config import (
     REPOSITORY_ROOT,
     compiler_pair,
     load_blaster_config,
+)
+from .candidate import (
+    DEFAULT_RELEASE_LOCK,
+    DEFAULT_SENTINEL,
+    run_candidate_gate,
 )
 from .corpus import plan_corpus, run_corpus
 from .compiler_artifacts import (
@@ -69,6 +75,17 @@ def _parser() -> argparse.ArgumentParser:
         "verify", help="verify a compiler artifact manifest and binary"
     )
     verify_parser.add_argument("manifest", type=Path)
+    baseline_parser = subcommands.add_parser(
+        "baseline", help="verify compact historical evidence baselines"
+    )
+    baseline_commands = baseline_parser.add_subparsers(
+        dest="baseline_command", required=True
+    )
+    baseline_verify = baseline_commands.add_parser(
+        "verify", help="verify checksums, identities, lineage, and CI attestation"
+    )
+    baseline_verify.add_argument("baseline", type=Path)
+
     profile_parser = subcommands.add_parser(
         "profile", help="lock and run versioned compiler comparison profiles"
     )
@@ -145,6 +162,45 @@ def _parser() -> argparse.ArgumentParser:
     corpus_run.add_argument("--force", action="store_true")
     _compiler_options(corpus_run)
 
+    candidate_parser = subcommands.add_parser(
+        "candidate", help="gate a local Aiken compiler candidate"
+    )
+    candidate_commands = candidate_parser.add_subparsers(
+        dest="candidate_command", required=True
+    )
+    candidate_gate = candidate_commands.add_parser(
+        "gate", help="run the complete local candidate release gate"
+    )
+    candidate_gate.add_argument(
+        "--base-compiler-manifest", type=Path, required=True
+    )
+    candidate_gate.add_argument(
+        "--candidate-compiler-manifest", type=Path, required=True
+    )
+    candidate_gate.add_argument(
+        "--feature-contract", type=Path, required=True
+    )
+    candidate_gate.add_argument("--corpus-lock", type=Path, required=True)
+    candidate_gate.add_argument(
+        "--scope", default="sentinel,mandatory"
+    )
+    candidate_gate.add_argument("--resume", action="store_true")
+    candidate_gate.add_argument(
+        "--policy", choices=("strict", "screening"), default="strict"
+    )
+    candidate_gate.add_argument(
+        "--release-lock", type=Path, default=DEFAULT_RELEASE_LOCK
+    )
+    candidate_gate.add_argument(
+        "--sentinel-package", type=Path, default=DEFAULT_SENTINEL
+    )
+    candidate_gate.add_argument(
+        "--work", type=Path, default=DEFAULT_WORK_ROOT
+    )
+    candidate_gate.add_argument(
+        "--blaster-config", type=Path, default=BLASTER_CONFIG_PATH
+    )
+    candidate_gate.add_argument("--jobs", type=int, default=1)
     subcommands.add_parser(
         "generate-builtins",
         help="regenerate the builtin sentinel families",
@@ -185,6 +241,16 @@ def main(argv: list[str] | None = None) -> int:
                 result = verify_compiler_manifest(args.manifest)
             else:
                 raise AssertionError(args.compiler_command)
+            print(json.dumps(result, indent=2, sort_keys=True))
+            return 0
+        except (FileNotFoundError, RuntimeError, ValueError, json.JSONDecodeError) as error:
+            print(str(error), file=sys.stderr)
+            return 1
+    if args.command == "baseline":
+        try:
+            if args.baseline_command != "verify":
+                raise AssertionError(args.baseline_command)
+            result = verify_baseline(args.baseline)
             print(json.dumps(result, indent=2, sort_keys=True))
             return 0
         except (FileNotFoundError, RuntimeError, ValueError, json.JSONDecodeError) as error:
@@ -239,6 +305,28 @@ def main(argv: list[str] | None = None) -> int:
             summary = generate_features()
             print(json.dumps(summary, indent=2, sort_keys=True))
             return 0
+        if args.command == "candidate":
+            scope = {
+                value.strip()
+                for value in args.scope.split(",")
+                if value.strip()
+            }
+            summary = run_candidate_gate(
+                base_compiler_manifest=args.base_compiler_manifest,
+                candidate_compiler_manifest=args.candidate_compiler_manifest,
+                feature_contract=args.feature_contract,
+                corpus_lock=args.corpus_lock,
+                scope=scope,
+                resume=args.resume,
+                policy=args.policy,
+                work_root=args.work,
+                blaster_config_path=args.blaster_config,
+                release_lock=args.release_lock,
+                sentinel_package=args.sentinel_package,
+                jobs=args.jobs,
+            )
+            print(json.dumps(summary, indent=2, sort_keys=True))
+            return 0 if summary["decision"] == "pass" else 2
 
         compilers = compiler_pair(
             old_aiken=args.old_aiken,

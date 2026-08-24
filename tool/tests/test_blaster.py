@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import stat
 import sys
@@ -14,15 +15,73 @@ from equiv_checker.blaster import (
     extract_witness,
     parse_blaster_output,
     parse_result_protocol,
+    parse_witness_protocol,
 )
 from equiv_checker.config import _installed_aiken
 from equiv_checker.process import ProcessResult, run_process
+from equiv_checker.evidence import witness_hash
 
-def _marker(status: str, *, pair_id: str = "pair", theorem_hash: str = "theorem") -> str:
-    return (
-        "EQUIV_RESULT_V1:"
-        f'{{"kind":"equivalence","pair_id":"{pair_id}","profile":"raw-uplc/v1",'
-        f'"status":"{status}","theorem_hash":"{theorem_hash}"}}'
+def _marker(
+    status: str,
+    *,
+    program_pair_id: str = "pair",
+    theorem_hash: str = "theorem",
+) -> str:
+    payload = _expected(
+        program_pair_id=program_pair_id,
+        theorem_hash=theorem_hash,
+    ) | {
+        "protocol_version": "EQUIV_RESULT_V2",
+        "solver_status": status,
+    }
+    return "EQUIV_RESULT_V2:" + json.dumps(
+        payload, sort_keys=True, separators=(",", ":")
+    )
+
+
+def _expected(
+    *,
+    program_pair_id: str = "pair",
+    theorem_hash: str = "theorem",
+) -> dict[str, str]:
+    return {
+        "program_pair_id": program_pair_id,
+        "logical_obligation_id": "obligation",
+        "semantic_model_id": "model",
+        "checker_configuration_id": "checker",
+        "old_script_sha256": "1" * 64,
+        "new_script_sha256": "2" * 64,
+        "verified_abi_id": "abi",
+        "obligation_kind": "observational_equivalence",
+        "theorem_statement_hash": theorem_hash,
+        "generated_source_schema_version": "equiv-generated-lean/v2",
+    }
+
+
+def _witness_marker(**changes) -> str:
+    record = {
+        "protocol_version": "EQUIV_WITNESS_V2",
+        "program_pair_id": "pair",
+        "logical_obligation_id": "obligation",
+        "theorem_statement_hash": "theorem",
+        "semantic_model_id": "model",
+        "ordered_argument_list": ["input"],
+        "argument_names": ["input"],
+        "argument_types": ["Integer"],
+        "structured_argument_values": [
+            {"kind": "integer", "value": -7}
+        ],
+        "serialized_uplc_argument_terms": ["(con integer -7)"],
+        "domain_satisfaction_evidence": {
+            "satisfied": True,
+            "predicate": "True",
+        },
+        "witness_source": "native_machine_protocol",
+    }
+    record.update(changes)
+    record["witness_sha256"] = witness_hash(record)
+    return "EQUIV_WITNESS_V2:" + json.dumps(
+        record, sort_keys=True, separators=(",", ":")
     )
 
 
@@ -45,13 +104,22 @@ class BlasterConfigTests(unittest.TestCase):
 
 class BlasterParsingTests(unittest.TestCase):
     def test_all_solver_verdicts_require_the_exact_protocol(self) -> None:
-        self.assertEqual(parse_blaster_output(_marker("valid"), ""), "blaster_valid")
         self.assertEqual(
-            parse_blaster_output(_marker("falsified"), ""),
+            parse_blaster_output(
+                _marker("valid"), "", expected=_expected()
+            ),
+            "blaster_valid",
+        )
+        self.assertEqual(
+            parse_blaster_output(
+                _marker("falsified"), "", expected=_expected()
+            ),
             "blaster_falsified_unreplayed",
         )
         self.assertEqual(
-            parse_blaster_output(_marker("inconclusive"), ""),
+            parse_blaster_output(
+                _marker("inconclusive"), "", expected=_expected()
+            ),
             "blaster_inconclusive",
         )
         self.assertEqual(
@@ -65,24 +133,65 @@ class BlasterParsingTests(unittest.TestCase):
                 _marker("valid") + "\n" + _marker("valid"),
                 "",
                 exit_code=0,
-                expected_pair_id="pair",
-                expected_theorem_hash="theorem",
+                expected=_expected(),
             )
         with self.assertRaises(ValueError):
             parse_result_protocol(
                 _marker("unknown"),
                 "",
                 exit_code=0,
-                expected_pair_id="pair",
-                expected_theorem_hash="theorem",
+                expected=_expected(),
             )
         with self.assertRaises(ValueError):
             parse_result_protocol(
-                _marker("valid", pair_id="other"),
+                _marker("valid", program_pair_id="other"),
                 "",
                 exit_code=0,
-                expected_pair_id="pair",
-                expected_theorem_hash="theorem",
+                expected=_expected(),
+            )
+
+    def test_witness_v2_rejects_binding_structure_and_serialization_tampering(
+        self,
+    ) -> None:
+        expected = _expected() | {
+            "ordered_argument_list": ["input"],
+            "argument_names": ["input"],
+            "argument_types": ["Integer"],
+        }
+        self.assertIsNotNone(
+            parse_witness_protocol(
+                _witness_marker(), "", expected=expected
+            )
+        )
+        mutations = (
+            {"program_pair_id": "other"},
+            {"logical_obligation_id": "other"},
+            {"theorem_statement_hash": "other"},
+            {"semantic_model_id": "other"},
+            {"ordered_argument_list": ["other"]},
+            {"argument_names": ["other"]},
+            {"argument_types": ["PlutusData"]},
+            {"structured_argument_values": [{"kind": "unsupported"}]},
+            {"serialized_uplc_argument_terms": ["(con integer 7)"]},
+            {
+                "domain_satisfaction_evidence": {
+                    "satisfied": False,
+                    "predicate": "False",
+                }
+            },
+        )
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                with self.assertRaises(ValueError):
+                    parse_witness_protocol(
+                        _witness_marker(**mutation),
+                        "",
+                        expected=expected,
+                    )
+        with self.assertRaises(ValueError):
+            marker = _witness_marker()
+            parse_witness_protocol(
+                marker + "\n" + marker, "", expected=expected
             )
 
     def test_integer_witness_is_machine_readable(self) -> None:
@@ -90,8 +199,14 @@ class BlasterParsingTests(unittest.TestCase):
         self.assertEqual(
             witness,
             {
-                "protocol": "EQUIV_WITNESS_V1",
-                "values": {"input": {"kind": "integer", "value": -7, "rendered": "-7"}},
+                "witness_source": "legacy_human_parser",
+                "values": {
+                    "input": {
+                        "kind": "integer",
+                        "value": -7,
+                        "rendered": "-7",
+                    }
+                },
                 "raw_available": True,
             },
         )
@@ -144,7 +259,11 @@ class BlasterParsingTests(unittest.TestCase):
             result = run_process([process], root, 10)
             self.assertEqual(result.exit_code, 0)
             self.assertEqual(
-                parse_blaster_output(result.stdout, result.stderr),
+                parse_blaster_output(
+                    result.stdout,
+                    result.stderr,
+                    expected=_expected(),
+                ),
                 "blaster_inconclusive",
             )
 

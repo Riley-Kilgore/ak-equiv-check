@@ -21,16 +21,28 @@ ROOT = Path(__file__).resolve().parents[2]
 BASELINES = ROOT / "results" / "baselines"
 
 class ProfileRegistryTests(unittest.TestCase):
-    def test_three_required_profiles_are_registered(self) -> None:
+    def test_required_historical_and_local_profiles_are_registered(self) -> None:
         registry = json.loads(PROFILE_REGISTRY.read_text())
         by_name = {profile["name"]: profile for profile in registry["profiles"]}
         self.assertEqual(
-            set(by_name), {"historical-equivalent", "historical-regression", "local-candidate"}
+            set(by_name),
+            {
+                "historical-equivalent",
+                "historical-regression",
+                "local-candidate",
+                "local-candidate-changed-output",
+            },
         )
         self.assertEqual(by_name["historical-equivalent"]["old_ref"], "v1.1.21")
         self.assertEqual(by_name["historical-equivalent"]["new_ref"], "v1.1.22")
         self.assertEqual(by_name["historical-regression"]["old_ref"], "v1.1.22")
         self.assertEqual(by_name["historical-regression"]["new_ref"], "v1.1.23")
+        changed = by_name["local-candidate-changed-output"]
+        self.assertTrue(changed["require_script_difference"])
+        self.assertEqual(
+            changed["expected_semantic_status"],
+            "equivalent_under_raw_model",
+        )
 
     def test_historical_profile_lock_uses_full_commit_shas(self) -> None:
         lock = json.loads(PROFILE_LOCK.read_text())

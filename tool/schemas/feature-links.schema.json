@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://equiv.local/schemas/feature-links.schema.json",
+  "type": "object",
+  "required": ["schema_version", "record_count", "records"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "record_count": {"type": "integer", "minimum": 0},
+    "records": {"type": "array", "items": {
+      "type": "object",
+      "required": ["feature_id", "row_kind", "status", "handler_pair_ids", "program_pair_ids", "semantic_obligation_ids", "all_linked_evidence", "required_evidence", "authoritative_evidence"],
+      "properties": {
+        "feature_id": {"type": "string"},
+        "row_kind": {"type": "string"},
+        "status": {"type": "string"},
+        "handler_pair_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "program_pair_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "semantic_obligation_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "all_linked_evidence": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "required_evidence": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "authoritative_evidence": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+      },
+      "additionalProperties": false
+    }}
+  },
+  "additionalProperties": false
+}

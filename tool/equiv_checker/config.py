@@ -211,10 +211,54 @@ def compiler_pair(
     )
 
 
+def _load_evaluator_config(
+    value: dict[str, Any] | None,
+    executable_override: Path | None,
+) -> EvaluatorConfig | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("evaluator configuration must be an object")
+    if executable_override is not None:
+        executable = executable_override.expanduser().resolve()
+    elif isinstance(value.get("path"), str):
+        executable = Path(value["path"]).expanduser()
+        if not executable.is_absolute():
+            executable = (REPOSITORY_ROOT / executable).resolve()
+    elif isinstance(value.get("release"), str):
+        executable = _installed_aiken("new", str(value["release"]))
+    else:
+        raise ValueError("evaluator requires a pinned path or release")
+    binary_hash = sha256_file(executable)
+    expected_hash = _configured_binary_hash(value)
+    if binary_hash != expected_hash:
+        raise RuntimeError(
+            "evaluator binary hash mismatch: "
+            f"expected {expected_hash}, got {binary_hash}"
+        )
+    return EvaluatorConfig(
+        name=str(value["name"]),
+        version=str(value["version"]),
+        revision=str(value["revision"]),
+        binary_sha256=binary_hash,
+        executable=executable,
+        evaluation_limits=dict(value.get("evaluation_limits", {})),
+        backend_kind=str(value.get("backend_kind", "aiken")),
+        separately_pinned=bool(value.get("separately_pinned", True)),
+        distinct_uplc_implementation=bool(
+            value.get("distinct_uplc_implementation", False)
+        ),
+        supported_limit_flags=tuple(
+            sorted(str(item) for item in value.get("supported_limit_flags", []))
+        ),
+    )
+
+
 def load_blaster_config(
     path: Path = BLASTER_CONFIG_PATH,
     *,
     evaluator_executable: Path | None = None,
+    secondary_evaluator_executable: Path | None = None,
 ) -> BlasterConfig:
     value = load_json(path)
     backend_root = Path(value["backend_root"]).expanduser()
@@ -223,31 +267,12 @@ def load_blaster_config(
     runtime_step_bound = value.get("semantic_runtime_step_bound")
     if not isinstance(runtime_step_bound, int) or runtime_step_bound <= 0:
         raise ValueError("semantic runtime step bound must be a positive integer")
-    evaluator_value = value.get("evaluator")
-    evaluator: EvaluatorConfig | None = None
-    if evaluator_value is not None:
-        if not isinstance(evaluator_value, dict):
-            raise ValueError("evaluator configuration must be an object")
-        evaluator_executable = (
-            _installed_aiken("new", str(evaluator_value["release"]))
-            if evaluator_executable is None
-            else evaluator_executable.expanduser().resolve()
-        )
-        evaluator_hash = sha256_file(evaluator_executable)
-        expected_evaluator_hash = _configured_binary_hash(evaluator_value)
-        if evaluator_hash != expected_evaluator_hash:
-            raise RuntimeError(
-                "evaluator binary hash mismatch: "
-                f"expected {expected_evaluator_hash}, got {evaluator_hash}"
-            )
-        evaluator = EvaluatorConfig(
-            name=str(evaluator_value["name"]),
-            version=str(evaluator_value["version"]),
-            revision=str(evaluator_value["revision"]),
-            binary_sha256=evaluator_hash,
-            executable=evaluator_executable,
-            evaluation_limits=dict(evaluator_value["evaluation_limits"]),
-        )
+    evaluator = _load_evaluator_config(
+        value.get("evaluator"), evaluator_executable
+    )
+    secondary_evaluator = _load_evaluator_config(
+        value.get("secondary_evaluator"), secondary_evaluator_executable
+    )
     solver_artifacts = value.get("solver_artifacts")
     platform_key_value = platform_key()
     if (
@@ -281,4 +306,5 @@ def load_blaster_config(
         timeouts=Timeouts.from_dict(value.get("timeouts", {})),
         random_seed=int(value.get("random_seed", 1)),
         evaluator=evaluator,
+        secondary_evaluator=secondary_evaluator,
     )

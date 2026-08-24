@@ -2,48 +2,24 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://equiv.local/schemas/summary-v2.schema.json",
   "type": "object",
-  "required": [
-    "schema_version", "run_id", "package", "mode", "strict_requested", "strict_pass",
-    "best_effort_completed", "counts", "status_counts", "selected_pair_ids",
-    "reused_pair_count", "reused_pair_ids", "require_script_difference",
-    "script_difference_observed", "gaps", "output", "source_immutable",
-    "dependency_lock_shared", "schema_errors"
-  ],
+  "required": ["schema_version", "run_id", "package", "mode", "strict_requested", "strict_pass", "best_effort_completed", "counts", "program_status_counts", "obligation_status_counts", "count_invariants", "status_counts", "selected_pair_ids", "reused_pair_count", "require_script_difference", "script_difference_observed", "reused_pair_ids", "gaps", "output", "source_immutable", "dependency_lock_shared", "schema_errors"],
   "properties": {
     "schema_version": {"const": 2},
     "run_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "package": {"type": "string", "minLength": 1},
-    "mode": {"enum": ["package", "sentinel"]},
-    "strict_requested": {"type": "boolean"},
-    "strict_pass": {"type": "boolean"},
-    "best_effort_completed": {"const": true},
-    "counts": {
-      "type": "object",
-      "required": [
-        "validators_discovered", "validators_discovered_old", "validators_discovered_new",
-        "validators_paired", "identical_pairs", "blaster_valid_pairs", "confirmed_differences",
-        "unreplayed_falsifications", "inconclusive_pairs", "unsupported_pairs", "build_failures",
-        "compatibility_differences", "shared_features_covered", "shared_features_missing"
-      ],
-      "additionalProperties": {"type": "integer", "minimum": 0}
-    },
+    "package": {"type": "string"}, "mode": {"enum": ["package", "sentinel"]},
+    "strict_requested": {"type": "boolean"}, "strict_pass": {"type": "boolean"},
+    "best_effort_completed": {"type": "boolean"},
+    "counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "program_status_counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "obligation_status_counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "count_invariants": {"type": "object", "required": ["program_final_states_equal_unique_program_pairs", "obligation_final_states_equal_unique_obligations"], "properties": {"program_final_states_equal_unique_program_pairs": {"type": "boolean"}, "obligation_final_states_equal_unique_obligations": {"type": "boolean"}}, "additionalProperties": false},
     "status_counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
-    "selected_pair_ids": {
-      "type": "array",
-      "items": {"type": "string", "minLength": 1},
-      "uniqueItems": true
-    },
+    "selected_pair_ids": {"type": "array", "items": {"type": "string"}},
     "reused_pair_count": {"type": "integer", "minimum": 0},
-    "reused_pair_ids": {
-      "type": "array",
-      "items": {"type": "string", "minLength": 1},
-      "uniqueItems": true
-    },
-    "require_script_difference": {"type": "boolean"},
-    "script_difference_observed": {"type": "boolean"},
+    "require_script_difference": {"type": "boolean"}, "script_difference_observed": {"type": "boolean"},
+    "reused_pair_ids": {"type": "array", "items": {"type": "string"}},
     "gaps": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
-    "output": {"type": "string", "minLength": 1},
-    "source_immutable": {"type": "boolean"},
+    "output": {"type": "string"}, "source_immutable": {"type": "boolean"},
     "dependency_lock_shared": {"type": "boolean"},
     "schema_errors": {"type": "array", "items": {"type": "string"}}
   },
