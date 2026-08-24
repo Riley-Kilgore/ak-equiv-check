@@ -42,6 +42,8 @@ uv run equiv-checker compiler build-release \
 
 Use `--aiken-source /path/to/aiken` instead of `--aiken-repository` to resolve and build from an existing upstream clone. Cached artifacts are reused only when all build inputs and the compiler binary still match their manifest.
 
+`corpus/compiler_release.lock.json` is the release trust root used by the candidate gate. It binds the canonical repository, annotated tag object, resolved commit and Git tree, source tree, `Cargo.lock`, reported Aiken version, required Rust version, build command, and each platform's target, binary, compiler artifact ID, and exact Rust toolchain. A missing release or platform record fails closed.
+
 A clean local candidate:
 
 ```bash
