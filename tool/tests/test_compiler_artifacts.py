@@ -344,6 +344,7 @@ class CompilerArtifactTests(unittest.TestCase):
             "target_triple": target["target_triple"],
             "binary_sha256": manifest["binary"]["sha256"],
             "compiler_artifact_id": manifest["artifact_id"],
+            "toolchain": manifest["toolchain"],
         }
         lock = {
             "schema_version": 1,

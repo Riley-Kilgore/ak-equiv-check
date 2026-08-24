@@ -21,7 +21,13 @@
           "architecture": "arm64",
           "target_triple": "aarch64-apple-darwin",
           "binary_sha256": "6082de4c5944395a1afc61c99396353fc33b7a6444e1780df9a0f4a6be80ec50",
-          "compiler_artifact_id": "8b8fba02dfca3e6909a207c8c3fc744736f750dc4cfc1c12bb61a440e19c1fcb"
+          "compiler_artifact_id": "8b8fba02dfca3e6909a207c8c3fc744736f750dc4cfc1c12bb61a440e19c1fcb",
+          "toolchain": {
+            "cargo_version": "cargo 1.97.1 (c980f4866 2026-06-30)",
+            "rustc_verbose": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: aarch64-apple-darwin\nrelease: 1.97.1\nLLVM version: 22.1.6",
+            "rustup_active_toolchain": "stable-aarch64-apple-darwin (default)",
+            "target_triple": "aarch64-apple-darwin"
+          }
         }
       }
     },
@@ -45,7 +51,13 @@
           "architecture": "arm64",
           "target_triple": "aarch64-apple-darwin",
           "binary_sha256": "cfcc622d8fce8278bbd26d0ad62a5d2753da1566a0c7b50bf5e35d421d823b84",
-          "compiler_artifact_id": "dc597cfa43c45901f54ec8d4c01656ecacc4b03ba977a3a89da11c500d555ba5"
+          "compiler_artifact_id": "dc597cfa43c45901f54ec8d4c01656ecacc4b03ba977a3a89da11c500d555ba5",
+          "toolchain": {
+            "cargo_version": "cargo 1.97.1 (c980f4866 2026-06-30)",
+            "rustc_verbose": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: aarch64-apple-darwin\nrelease: 1.97.1\nLLVM version: 22.1.6",
+            "rustup_active_toolchain": "stable-aarch64-apple-darwin (default)",
+            "target_triple": "aarch64-apple-darwin"
+          }
         }
       }
     },
@@ -69,7 +81,13 @@
           "architecture": "arm64",
           "target_triple": "aarch64-apple-darwin",
           "binary_sha256": "6685b016a98cb7a494ed1a4b2a4ad804bae7e54605a6a17c9cd50da3c9e05d31",
-          "compiler_artifact_id": "125aae877b0a5c9638315191e9fdde8019a984983e43c73de795f0594c1914a1"
+          "compiler_artifact_id": "125aae877b0a5c9638315191e9fdde8019a984983e43c73de795f0594c1914a1",
+          "toolchain": {
+            "cargo_version": "cargo 1.97.1 (c980f4866 2026-06-30)",
+            "rustc_verbose": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: aarch64-apple-darwin\nrelease: 1.97.1\nLLVM version: 22.1.6",
+            "rustup_active_toolchain": "stable-aarch64-apple-darwin (default)",
+            "target_triple": "aarch64-apple-darwin"
+          }
         }
       }
     }

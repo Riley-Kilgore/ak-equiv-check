@@ -299,6 +299,7 @@ def run_candidate_gate(
         "candidate_artifact_id": candidate_manifest["artifact_id"],
         "feature_contract_sha256": _sha256(feature_path),
         "corpus_lock_sha256": _sha256(corpus_path),
+        "release_lock_sha256": base_lock_validation["release_lock_sha256"],
         "scope": sorted(scope),
         "policy": policy,
         "checker_configuration_id": config.checker_configuration()[

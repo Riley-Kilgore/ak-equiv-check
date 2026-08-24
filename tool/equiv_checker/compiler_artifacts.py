@@ -470,6 +470,7 @@ def verify_release_lock(
         "target_triple": target.get("target_triple"),
         "binary_sha256": manifest["binary"]["sha256"],
         "compiler_artifact_id": manifest["artifact_id"],
+        "toolchain": manifest["toolchain"],
     }
     for key, actual in platform_actual.items():
         if platform_record.get(key) != actual:
