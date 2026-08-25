@@ -14,6 +14,7 @@ from typing import Any, Mapping
 from .candidate_bundle import (
     CANDIDATE_BUNDLE_SCHEMA_VERSION,
     candidate_ci_provenance_valid,
+    expected_task_classification,
     finalize_candidate_bundle,
     verify_candidate_bundle,
 )
@@ -246,8 +247,17 @@ def _result_summary(value: Any) -> dict[str, Any] | None:
         "dependency_lock_bytes_unchanged",
         "dependency_lock_sha256_before",
         "dependency_lock_sha256_after",
+        "build_timed_out",
+        "uplc_extraction_exit_code",
+        "uplc_extraction_timed_out",
+        "blueprint_present",
+        "blueprint_malformed",
+        "blueprint_compatibility",
     )
-    return {field: value.get(field) for field in fields if field in value}
+    summary = {field: value.get(field) for field in fields if field in value}
+    if "abi_inspection" in value:
+        summary["abi_inspection"] = value["abi_inspection"]
+    return summary
 
 def _result_inputs_unchanged(
     value: Any,
@@ -1010,36 +1020,19 @@ def run_candidate_gate(
         program_pairs, semantic_models, obligations, final_results
     )
     pair_classification_by_id = {
-        row["program_pair_id"]: row for row in pair_classifications
+        row["program_pair_id"]: row["classification"]
+        for row in pair_classifications
     }
     for task in task_rows:
         task["evidence_result_ids"] = sorted(
             evidence_result_by_obligation[obligation_id]
             for obligation_id in task["logical_obligation_ids"]
         )
-        if task["inputs_verified"] is not True:
-            task["classification"] = "source_mutated"
-            continue
-        if task["lane"] == "equivalence":
-            classifications = [
-                pair_classification_by_id[pair_id]["classification"]
-                for pair_id in task["program_pair_ids"]
-            ]
-            task["classification"] = (
-                "not_applicable"
-                if not classifications
-                else "equivalence_passed"
-                if all(
-                    classification
-                    in {
-                        "identical",
-                        "equivalent_under_raw_model",
-                        "bounded_equivalent",
-                    }
-                    for classification in classifications
-                )
-                else classifications[0]
-            )
+        classification = expected_task_classification(
+            task, pair_classification_by_id
+        )
+        if classification is not None:
+            task["classification"] = classification
     for source in source_identity_rows:
         source["evidence_result_ids"] = sorted(
             evidence_result_by_obligation[obligation_id]

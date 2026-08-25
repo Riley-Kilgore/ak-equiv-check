@@ -15,6 +15,7 @@ from equiv_checker.candidate_policy import (
     derive_candidate_decisions,
 )
 from equiv_checker.evidence import evidence_run_id
+from equiv_checker.candidate_bundle import expected_task_classification
 
 
 class CandidateGateTests(unittest.TestCase):
@@ -125,6 +126,59 @@ class CandidateGateTests(unittest.TestCase):
         )
         self.assertFalse(task["inputs_verified"])
         self.assertFalse(task["source_immutable"])
+
+    def test_equivalence_discovery_failures_cannot_become_not_applicable(
+        self,
+    ) -> None:
+        successful_build = {
+            "primary_exit_code": 0,
+            "build_timed_out": False,
+            "uplc_extraction_exit_code": 0,
+            "uplc_extraction_timed_out": False,
+            "blueprint_present": True,
+            "blueprint_malformed": False,
+            "abi_inspection": {},
+            "source_hash_before": "a" * 64,
+            "source_hash_after": "a" * 64,
+            "dependency_graph_before": "b" * 64,
+            "dependency_graph_after": "b" * 64,
+        }
+        cases = (
+            ("old", {"primary_exit_code": 1}, "old_build_failed"),
+            ("new", {"primary_exit_code": 1}, "new_build_failed"),
+            (
+                "new",
+                {"uplc_extraction_exit_code": 1},
+                "new_uplc_extraction_failed",
+            ),
+            ("new", {"blueprint_present": False}, "new_blueprint_missing"),
+            ("new", {"abi_inspection": None}, "compiled_abi_unverified"),
+        )
+        for side, mutation, expected in cases:
+            with self.subTest(expected=expected):
+                task = _task_record(
+                    {
+                        "task_id": "feature-sentinel",
+                        "source_id": "feature-sentinel",
+                        "lane": "equivalence",
+                        "classification": "discovery_completed",
+                        "source_hash_before": "a" * 64,
+                        "source_hash_after": "a" * 64,
+                        "dependency_graph_before": "b" * 64,
+                        "dependency_graph_after": "b" * 64,
+                        "source_immutable": True,
+                        "old_result": successful_build
+                        | (mutation if side == "old" else {}),
+                        "new_result": successful_build
+                        | (mutation if side == "new" else {}),
+                    },
+                    program_pair_ids=[],
+                    logical_obligation_ids=[],
+                )
+                self.assertEqual(
+                    expected_task_classification(task, {}),
+                    expected,
+                )
 
     def test_evidence_identity_rejects_policy_inputs(self) -> None:
         neutral_inputs = {

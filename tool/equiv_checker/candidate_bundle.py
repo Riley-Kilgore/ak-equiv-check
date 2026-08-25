@@ -260,13 +260,40 @@ def _task_inputs_verified(task: Mapping[str, Any]) -> bool:
     return True
 
 
-def _expected_task_classification(
+def expected_task_classification(
     task: Mapping[str, Any],
     pair_classification_by_id: Mapping[str, str],
 ) -> str | None:
     if not _task_inputs_verified(task):
         return "source_mutated"
     lane = task.get("lane")
+    if lane == "equivalence":
+        for side in ("old", "new"):
+            result = task.get(f"{side}_result")
+            if not isinstance(result, dict) or "primary_exit_code" not in result:
+                continue
+            if (
+                result.get("build_timed_out")
+                or result.get("primary_exit_code") != 0
+            ):
+                return f"{side}_build_failed"
+            if (
+                result.get("uplc_extraction_timed_out")
+                or result.get("uplc_extraction_exit_code") != 0
+            ):
+                return f"{side}_uplc_extraction_failed"
+            if result.get("blueprint_present") is False:
+                return f"{side}_blueprint_missing"
+            if result.get("blueprint_malformed") is True:
+                compatibility = result.get("blueprint_compatibility")
+                status = (
+                    compatibility.get("status")
+                    if isinstance(compatibility, dict)
+                    else "blueprint_malformed"
+                )
+                return f"{side}_{status}"
+            if "abi_inspection" in result and result["abi_inspection"] is None:
+                return "compiled_abi_unverified"
     if lane == "equivalence":
         classifications = [
             pair_classification_by_id[str(pair_id)]
@@ -947,7 +974,7 @@ def verify_candidate_bundle(path: Path) -> dict[str, Any]:
         "not_applicable",
     }
     for task in task_results:
-        expected_classification = _expected_task_classification(
+        expected_classification = expected_task_classification(
             task, pair_classification_by_id
         )
         if expected_classification is None:
