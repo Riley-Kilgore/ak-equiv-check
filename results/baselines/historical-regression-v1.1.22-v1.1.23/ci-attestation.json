@@ -1,15 +1,15 @@
 {
-  "artifact_id": 9548230518,
-  "artifact_sha256": "a62bcc24fcfc5e58665143f198bfbea653b91a2fec6e15285e6c255d4bc89467",
+  "artifact_id": 9549851247,
+  "artifact_sha256": "6cfe98d1cbe2f232e033b68b1f9a5f531561712aed12c44f430ec07dadd9bc4b",
   "attestation_kind": "public_ci_reproduction",
-  "baseline_content_id": "28311f12c8b8ba35bf78da5505f9040286602e80976668a5a075b453be9ab049",
-  "capture_command": "python scripts/capture_historical_baseline.py --profile historical-regression-v1.1.22-v1.1.23 --run ea4ca0e558eb93a1a7c71e62b553b9d0a7d54409e3fbf461d9140755395fedd7 --output results/baselines/historical-regression-v1.1.22-v1.1.23",
-  "github_run_id": 32805027753,
-  "job_id": 97673371985,
+  "baseline_content_id": "282916b4b280a8fd05c916ec53682124d86b876c8fb6260273cad3b6162f1400",
+  "capture_command": "python scripts/capture_historical_baseline.py --profile historical-regression-v1.1.22-v1.1.23 --run b88d9336298dc9ac72e804308314ea62f9f60cf728b26d672f50764ce88f8cf5 --output results/baselines/historical-regression-v1.1.22-v1.1.23",
+  "github_run_id": 32810278831,
+  "job_id": 97688186425,
   "platform": "ubuntu-24.04",
   "profile_id": "historical-regression-v1.1.22-v1.1.23",
-  "repository_commit": "f7031dd39b95fc04b71ed9a20ca08c20e222fb7f",
+  "repository_commit": "2bf0e6c79af9df38493e2ef8758370916e950c88",
   "schema_version": 3,
   "verification_result": "verified",
-  "workflow_revision": "f7031dd39b95fc04b71ed9a20ca08c20e222fb7f"
+  "workflow_revision": "2bf0e6c79af9df38493e2ef8758370916e950c88"
 }
