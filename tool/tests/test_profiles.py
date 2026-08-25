@@ -437,17 +437,23 @@ class HistoricalBaselineTests(unittest.TestCase):
         regression_root = (
             BASELINES / "historical-regression-v1.1.22-v1.1.23"
         )
-        replayed = [
+        results_with_replay = [
             row
             for row in self._records(
                 regression_root, "obligation-results.ndjson"
             )
-            if "replay" in row
+            if row["replay_reference"] is not None
         ]
-        self.assertEqual(len(replayed), 1)
-        result = replayed[0]
-        replay = result["replay"]
-        witness = result["witness"]
+        replays = self._records(regression_root, "replays.ndjson")
+        witnesses = self._records(regression_root, "witnesses.ndjson")
+        self.assertEqual(len(results_with_replay), 1)
+        self.assertEqual(len(replays), 1)
+        self.assertEqual(len(witnesses), 1)
+        result = results_with_replay[0]
+        replay = replays[0]
+        witness = witnesses[0]
+        self.assertEqual(result["replay_reference"], replay["replay_id"])
+        self.assertEqual(result["witness_reference"], witness["witness_id"])
         self.assertTrue(replay["confirmed"])
         self.assertEqual(
             replay["logical_obligation_id"],
@@ -457,10 +463,23 @@ class HistoricalBaselineTests(unittest.TestCase):
         self.assertEqual(
             replay["semantic_model_id"], result["semantic_model_id"]
         )
-        self.assertEqual(witness["protocol_version"], "EQUIV_WITNESS_V2")
+        self.assertEqual(witness["protocol_version"], "EQUIV_WITNESS_V3")
         self.assertEqual(witness["witness_source"], "legacy_human_parser")
         self.assertEqual(
             witness["witness_sha256"], replay["witness_sha256"]
+        )
+        self.assertEqual(replay["witness_id"], witness["witness_id"])
+        self.assertEqual(
+            witness["producing_logical_obligation_id"],
+            result["logical_obligation_id"],
+        )
+        self.assertEqual(
+            witness["producing_obligation_attempt_id"],
+            result["obligation_attempt_id"],
+        )
+        self.assertEqual(
+            witness["producing_execution_attempt_id"],
+            result["execution_attempt_id"],
         )
         self.assertTrue(
             replay["legacy_witness_validation"][
