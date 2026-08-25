@@ -9,7 +9,7 @@ import sys
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 from .candidate_bundle import (
     CANDIDATE_BUNDLE_SCHEMA_VERSION,
@@ -163,6 +163,50 @@ def _merge_program_pair(
         )
         previous[side]["source_validator_references"] = values
     return previous
+
+
+def _global_execution_schedule(
+    obligations: Iterable[Mapping[str, Any]],
+) -> dict[tuple[str, str], tuple[str, ...]]:
+    unique: dict[str, dict[str, Any]] = {}
+    for obligation in obligations:
+        obligation_id = str(obligation["logical_obligation_id"])
+        record = dict(obligation)
+        previous = unique.setdefault(obligation_id, record)
+        if previous != record:
+            raise ValueError(
+                f"logical obligation identity conflict: {obligation_id}"
+            )
+    grouped: dict[tuple[str, str], list[str]] = {}
+    for obligation_id, obligation in unique.items():
+        grouped.setdefault(
+            (
+                str(obligation["program_pair_id"]),
+                str(obligation["semantic_model_id"]),
+            ),
+            [],
+        ).append(obligation_id)
+    return {
+        key: tuple(sorted(obligation_ids))
+        for key, obligation_ids in grouped.items()
+    }
+
+
+def _duplicate_solver_invocations_prevented(
+    schedule: Mapping[tuple[str, str], tuple[str, ...]],
+    pair_consumers: Mapping[str, list[Mapping[str, Any]]],
+    cache_reused_obligations: int,
+) -> int:
+    obligations_by_pair: dict[str, int] = {}
+    for (pair_id, _), obligation_ids in schedule.items():
+        obligations_by_pair[pair_id] = (
+            obligations_by_pair.get(pair_id, 0) + len(obligation_ids)
+        )
+    consumer_reuses = sum(
+        obligations_by_pair.get(pair_id, 0) * max(0, len(consumers) - 1)
+        for pair_id, consumers in pair_consumers.items()
+    )
+    return consumer_reuses + cache_reused_obligations
 
 
 def _input_model(value: Mapping[str, Any]) -> InputModel:
@@ -830,15 +874,7 @@ def run_candidate_gate(
         }
         for obligation_id, obligation in obligation_rows.items()
     }
-    grouped_obligations: dict[tuple[str, str], list[str]] = {}
-    for obligation_id, obligation in obligation_rows.items():
-        grouped_obligations.setdefault(
-            (
-                str(obligation["program_pair_id"]),
-                str(obligation["semantic_model_id"]),
-            ),
-            [],
-        ).append(obligation_id)
+    grouped_obligations = _global_execution_schedule(obligation_rows.values())
     obligation_results: dict[str, dict[str, Any]] = {}
     execution_attempts: dict[str, dict[str, Any]] = {}
     witnesses: dict[str, dict[str, Any]] = {}
@@ -1146,16 +1182,20 @@ def run_candidate_gate(
             }
         )
 
-    consumer_reuses = sum(
-        max(0, len(consumers) - 1)
-        for consumers in pair_consumers.values()
+    duplicate_solver_invocations_prevented = (
+        _duplicate_solver_invocations_prevented(
+            grouped_obligations,
+            pair_consumers,
+            cache_reuse_count,
+        )
     )
     runtime_counts = {
         "cache_reused_obligations": cache_reuse_count,
         "executed_unique_obligations": executed_obligation_count,
         "semantic_execution_batches": executed_batch_count,
-        "duplicate_solver_invocations_prevented": consumer_reuses
-        + cache_reuse_count,
+        "duplicate_solver_invocations_prevented": (
+            duplicate_solver_invocations_prevented
+        ),
         "obligation_results": len(final_results),
         "pending_obligations": 0,
     }

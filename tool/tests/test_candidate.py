@@ -6,6 +6,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from equiv_checker.candidate import (
+    _duplicate_solver_invocations_prevented,
+    _global_execution_schedule,
     _merge_program_pair,
     _task_record,
     run_candidate_gate,
@@ -71,6 +73,79 @@ class CandidateGateTests(unittest.TestCase):
             ["handler-a", "handler-b"],
         )
         self.assertEqual(previous["covered_feature_ids"], ["feature-a", "feature-b"])
+
+    def test_same_obligation_from_two_packages_is_scheduled_once(self) -> None:
+        pair_id = "d" * 64
+        obligation = {
+            "logical_obligation_id": "e" * 64,
+            "program_pair_id": pair_id,
+            "semantic_model_id": "f" * 64,
+            "obligation_kind": "observational_equivalence",
+        }
+        schedule = _global_execution_schedule([obligation, dict(obligation)])
+        self.assertEqual(schedule, {(pair_id, "f" * 64): ("e" * 64,)})
+        self.assertEqual(
+            _duplicate_solver_invocations_prevented(
+                schedule,
+                {
+                    pair_id: [
+                        {"source_id": "package-a", "task_id": "task-a"},
+                        {"source_id": "package-b", "task_id": "task-b"},
+                    ]
+                },
+                0,
+            ),
+            1,
+        )
+
+    def test_same_obligation_from_sentinel_and_corpus_is_scheduled_once(
+        self,
+    ) -> None:
+        pair_id = "1" * 64
+        obligation = {
+            "logical_obligation_id": "2" * 64,
+            "program_pair_id": pair_id,
+            "semantic_model_id": "3" * 64,
+            "obligation_kind": "old_program_completion",
+        }
+        schedule = _global_execution_schedule([obligation, dict(obligation)])
+        self.assertEqual(schedule, {(pair_id, "3" * 64): ("2" * 64,)})
+        self.assertEqual(
+            _duplicate_solver_invocations_prevented(
+                schedule,
+                {
+                    pair_id: [
+                        {
+                            "source_id": "feature-sentinel",
+                            "task_id": "feature-sentinel",
+                        },
+                        {
+                            "source_id": "mandatory-source",
+                            "task_id": "mandatory-task",
+                        },
+                    ]
+                },
+                0,
+            ),
+            1,
+        )
+
+    def test_identical_shared_pair_does_not_claim_prevented_solver_work(
+        self,
+    ) -> None:
+        self.assertEqual(
+            _duplicate_solver_invocations_prevented(
+                {},
+                {
+                    "4" * 64: [
+                        {"source_id": "source-a", "task_id": "task-a"},
+                        {"source_id": "source-b", "task_id": "task-b"},
+                    ]
+                },
+                0,
+            ),
+            0,
+        )
 
     def test_no_lockfile_is_bound_as_a_verified_empty_dependency_graph(self) -> None:
         task = _task_record(

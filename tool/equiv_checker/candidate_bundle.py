@@ -1070,8 +1070,13 @@ def verify_candidate_bundle(path: Path) -> dict[str, Any]:
         or counts.get("semantic_execution_batches") != len(executed_batches)
     ):
         raise ValueError("candidate obligation count invariants do not hold")
+    obligations_by_pair: dict[str, int] = {}
+    for obligation in obligations:
+        pair_id = str(obligation["program_pair_id"])
+        obligations_by_pair[pair_id] = obligations_by_pair.get(pair_id, 0) + 1
     consumer_reuses = sum(
-        max(
+        obligations_by_pair.get(pair_id, 0)
+        * max(
             0,
             sum(
                 pair_id in task.get("program_pair_ids", [])
