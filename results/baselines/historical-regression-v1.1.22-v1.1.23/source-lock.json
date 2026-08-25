@@ -8,15 +8,15 @@
   "source_hash": "a129e73533b2d496e082bec20d555d95eb868decd3b356f7a9424a8187733091",
   "source_immutable": true,
   "source_provenance": {
-    "commit": "2bf0e6c79af9df38493e2ef8758370916e950c88",
+    "commit": "7b8a68463ffb84bf86b3ef2e03ad0026c9e2dc88",
     "dirty": false,
-    "identity": "da495b63e119b5a0e52a2b49de662e95d59b19e2093cfcb0f6a712d090956d62",
+    "identity": "901feeba2e92a3657f1edcd798423b451799ff56a1f86693e01969326d487c23",
     "identity_fields": {
       "adapter_hash": null,
       "canonical_repository_url": "https://github.com/Riley-Kilgore/ak-equiv-check",
       "dependency_lock_hash": "88ea28f7520d83d207bae89c30e2f6a2d27b337e36eb19b59a5ef01edefb820b",
       "package_subpath": "fixtures/historical-codegen-regression",
-      "revision": "2bf0e6c79af9df38493e2ef8758370916e950c88",
+      "revision": "7b8a68463ffb84bf86b3ef2e03ad0026c9e2dc88",
       "source_hash": "a129e73533b2d496e082bec20d555d95eb868decd3b356f7a9424a8187733091"
     },
     "kind": "git",

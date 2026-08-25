@@ -1,8 +1,8 @@
 {
   "blaster_configuration": {
     "cardano_ledger_api_blaster_revision": "577e3eb03b5be09354cfdb1c0d0c12e9e16541a0",
-    "checker_configuration_id": "12378ebe75a8ae3f907166d1fcd8ac51343d4881e9fe14d62b3393f82c22dfc1",
-    "checker_implementation_id": "7b1ce8e8142d7e0d1aeba2b7a8bee20998124a78c07527714e4d45beec56d58f",
+    "checker_configuration_id": "11b5aac74358f692743cf284af7cafd0c1f3dfcfd18f8d791766ec273a1b2afd",
+    "checker_implementation_id": "18ad5ed411166a3a4d8ff1956554945c391eead847b5af9039479f3e7bd556b7",
     "evaluator": {
       "backend_kind": "aiken",
       "binary_sha256": "748b9d45785fbded901ed87475072b6d20ee259bb4588c72428c12a19e8902d3",
@@ -51,11 +51,11 @@
     "feature_contract_sha256": null,
     "mode": "package",
     "require_script_difference": true,
-    "runner_sha256": "7b1ce8e8142d7e0d1aeba2b7a8bee20998124a78c07527714e4d45beec56d58f",
+    "runner_sha256": "18ad5ed411166a3a4d8ff1956554945c391eead847b5af9039479f3e7bd556b7",
     "schema_version": 2,
     "semantic_contract": "forall raw_arguments, observe(old_program(raw_arguments)) = observe(new_program(raw_arguments))"
   },
-  "checker_implementation_id": "7b1ce8e8142d7e0d1aeba2b7a8bee20998124a78c07527714e4d45beec56d58f",
+  "checker_implementation_id": "18ad5ed411166a3a4d8ff1956554945c391eead847b5af9039479f3e7bd556b7",
   "replay_trust": [
     {
       "distinct_uplc_implementation": false,
