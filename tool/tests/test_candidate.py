@@ -167,6 +167,7 @@ class CandidateGateTests(unittest.TestCase):
                         "dependency_graph_before": "b" * 64,
                         "dependency_graph_after": "b" * 64,
                         "source_immutable": True,
+                        "equivalence_required": True,
                         "old_result": successful_build
                         | (mutation if side == "old" else {}),
                         "new_result": successful_build
@@ -199,6 +200,11 @@ class CandidateGateTests(unittest.TestCase):
         self.assertEqual(
             expected_task_classification(task, {}),
             "not_applicable",
+        )
+        task["equivalence_required"] = True
+        self.assertEqual(
+            expected_task_classification(task, {}),
+            "missing_evidence",
         )
 
     def test_evidence_identity_rejects_policy_inputs(self) -> None:

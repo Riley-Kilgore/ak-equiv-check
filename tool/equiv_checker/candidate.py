@@ -256,7 +256,9 @@ def _result_summary(value: Any) -> dict[str, Any] | None:
     )
     summary = {field: value.get(field) for field in fields if field in value}
     if "abi_inspection" in value:
-        summary["abi_inspection"] = value["abi_inspection"]
+        summary["abi_inspection_status"] = (
+            "verified" if value["abi_inspection"] is not None else "unverified"
+        )
     return summary
 
 def _result_inputs_unchanged(
@@ -337,6 +339,7 @@ def _task_record(
         "classification": classification,
         "original_classification": classification,
         "strict_relevance": bool(row.get("strict_relevance", True)),
+        "equivalence_required": bool(row.get("equivalence_required", False)),
         "expected_outcome": row.get("expected_outcome"),
         "expected_diagnostic": row.get("expected_diagnostic"),
         "source_hash_before": source_before,
@@ -619,6 +622,7 @@ def run_candidate_gate(
                 "task_id": "feature-sentinel",
                 "lane": "equivalence",
                 "classification": "discovery_completed",
+                "equivalence_required": True,
                 "source_hash_before": run["source_hash"],
                 "source_hash_after": run["source_hash"],
                 "dependency_graph_before": builds["old"]["dependency_graph_before"],

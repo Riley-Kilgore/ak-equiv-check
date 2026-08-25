@@ -268,6 +268,10 @@ def expected_task_classification(
         return "source_mutated"
     lane = task.get("lane")
     if lane == "equivalence":
+        classifications = [
+            pair_classification_by_id[str(pair_id)]
+            for pair_id in task.get("program_pair_ids", [])
+        ]
         for side in ("old", "new"):
             result = task.get(f"{side}_result")
             if not isinstance(result, dict) or "primary_exit_code" not in result:
@@ -277,6 +281,8 @@ def expected_task_classification(
                 or result.get("primary_exit_code") != 0
             ):
                 return f"{side}_build_failed"
+            if not task.get("equivalence_required") and not classifications:
+                continue
             if result.get("uplc_extraction_timed_out") or result.get(
                 "uplc_extraction_exit_code"
             ) not in {None, 0}:
@@ -291,15 +297,14 @@ def expected_task_classification(
                     else "blueprint_malformed"
                 )
                 return f"{side}_{status}"
-            if "abi_inspection" in result and result["abi_inspection"] is None:
+            if result.get("abi_inspection_status") == "unverified":
                 return "compiled_abi_unverified"
-    if lane == "equivalence":
-        classifications = [
-            pair_classification_by_id[str(pair_id)]
-            for pair_id in task.get("program_pair_ids", [])
-        ]
         if not classifications:
-            return "not_applicable"
+            return (
+                "missing_evidence"
+                if task.get("equivalence_required")
+                else "not_applicable"
+            )
         if all(
             classification
             in {

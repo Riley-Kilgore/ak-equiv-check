@@ -771,6 +771,7 @@ def _execute_task(
         "expected_outcome": task["expected_outcome"],
         "strict_policy": LANE_STRICT_POLICY[task["lane"]],
         "strict_relevance": True,
+        "equivalence_required": bool(task.get("equivalence_required", False)),
         "adapter": adapter_record,
         "adapter_hash": adapter_hash,
         "source_hash": task["source_hash"],
