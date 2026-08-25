@@ -18,6 +18,10 @@ from .candidate import (
     DEFAULT_SENTINEL,
     run_candidate_gate,
 )
+from .candidate_bundle import (
+    verify_attested_candidate_archive,
+    verify_candidate_bundle,
+)
 from .corpus import plan_corpus, run_corpus
 from .compiler_artifacts import (
     DEFAULT_AIKEN_REPOSITORY,
@@ -201,6 +205,20 @@ def _parser() -> argparse.ArgumentParser:
         "--blaster-config", type=Path, default=BLASTER_CONFIG_PATH
     )
     candidate_gate.add_argument("--jobs", type=int, default=1)
+    candidate_verify = candidate_commands.add_parser(
+        "verify",
+        help="recompute candidate bundle identities, links, checksums, and decisions",
+    )
+    candidate_verify.add_argument("candidate_bundle", type=Path)
+    candidate_verify.add_argument(
+        "--repository",
+        help="trusted GitHub owner/name for signed archive verification",
+    )
+    candidate_verify.add_argument(
+        "--attestation-bundle",
+        type=Path,
+        help="detached Sigstore bundle emitted by GitHub attestation",
+    )
     subcommands.add_parser(
         "generate-builtins",
         help="regenerate the builtin sentinel families",
@@ -306,6 +324,30 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(summary, indent=2, sort_keys=True))
             return 0
         if args.command == "candidate":
+            if args.candidate_command == "verify":
+                if args.candidate_bundle.is_dir():
+                    if (
+                        args.repository is not None
+                        or args.attestation_bundle is not None
+                    ):
+                        raise ValueError(
+                            "detached attestation options require an archive"
+                        )
+                    verification = verify_candidate_bundle(
+                        args.candidate_bundle
+                    )
+                else:
+                    if args.repository is None:
+                        raise ValueError(
+                            "archive verification requires --repository"
+                        )
+                    verification = verify_attested_candidate_archive(
+                        args.candidate_bundle,
+                        repository=args.repository,
+                        attestation_bundle=args.attestation_bundle,
+                    )
+                print(json.dumps(verification, indent=2, sort_keys=True))
+                return 0
             scope = {
                 value.strip()
                 for value in args.scope.split(",")
@@ -326,7 +368,7 @@ def main(argv: list[str] | None = None) -> int:
                 jobs=args.jobs,
             )
             print(json.dumps(summary, indent=2, sort_keys=True))
-            return 0 if summary["decision"] == "pass" else 2
+            return 0 if summary["selected_decision"] == "pass" else 2
 
         compilers = compiler_pair(
             old_aiken=args.old_aiken,

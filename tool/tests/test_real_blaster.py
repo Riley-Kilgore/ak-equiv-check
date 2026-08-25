@@ -241,7 +241,7 @@ class RealBlasterGoldenTests(unittest.TestCase):
             result = self.backend.compare(pair, model, output)
             self.assertEqual(result.status, "blaster_falsified_unreplayed")
             self.assertEqual(
-                result.witness["protocol_version"], "EQUIV_WITNESS_V2"
+                result.witness["protocol_version"], "EQUIV_WITNESS_V3"
             )
             replay = self.backend.replay(pair, model, result.witness, output)
             self.assertTrue(replay["confirmed"])

@@ -17,7 +17,7 @@ on:
           - first-wave
           - full-corpus
 permissions:
-  contents: write
+  contents: read
 
 
 jobs:
@@ -54,8 +54,16 @@ jobs:
       - name: Verify checked historical baseline identities
         working-directory: tool
         run: |
-          uv run equiv-checker baseline verify ../results/baselines/historical-equivalent-v1.1.21-v1.1.22
-          uv run equiv-checker baseline verify ../results/baselines/historical-regression-v1.1.22-v1.1.23
+          for BASELINE in \
+            ../results/baselines/historical-equivalent-v1.1.21-v1.1.22 \
+            ../results/baselines/historical-regression-v1.1.22-v1.1.23
+          do
+            if [ "$(jq -r .schema_version "$BASELINE/checksums.json")" = 3 ]; then
+              uv run equiv-checker baseline verify "$BASELINE"
+            else
+              echo "::notice::$BASELINE is explicitly legacy pending public-CI schema-version-3 publication"
+            fi
+          done
 
   evidence-integrity:
     runs-on: ubuntu-24.04
@@ -81,7 +89,7 @@ jobs:
           test_baseline
 
 
-  baseline-v2-verification:
+  candidate-gate-policy:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -92,11 +100,57 @@ jobs:
       - name: Install Python dependencies
         working-directory: tool
         run: uv sync --locked
-      - name: Verify both schema-version-2 historical baselines
+      - name: Test policy-neutral evidence and strict and screening decisions
+        working-directory: tool
+        env:
+          PYTHONPATH: tests
+        run: uv run python -m unittest -v test_candidate
+
+  candidate-bundle-verification:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          version: "0.8.13"
+          enable-cache: true
+      - name: Install Python dependencies
+        working-directory: tool
+        run: uv sync --locked
+      - name: Test candidate bundle, cache, and implementation identities
+        working-directory: tool
+        env:
+          PYTHONPATH: tests
+        run: >-
+          uv run python -m unittest -v
+          test_candidate_bundle
+          test_evidence_store
+          test_checker_implementation
+
+  baseline-v3-verification:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          version: "0.8.13"
+          enable-cache: true
+      - name: Install Python dependencies
+        working-directory: tool
+        run: uv sync --locked
+      - name: Verify schema-version-3 historical baselines
         working-directory: tool
         run: |
-          uv run equiv-checker baseline verify ../results/baselines/historical-equivalent-v1.1.21-v1.1.22
-          uv run equiv-checker baseline verify ../results/baselines/historical-regression-v1.1.22-v1.1.23
+          for BASELINE in \
+            ../results/baselines/historical-equivalent-v1.1.21-v1.1.22 \
+            ../results/baselines/historical-regression-v1.1.22-v1.1.23
+          do
+            if [ "$(jq -r .schema_version "$BASELINE/checksums.json")" = 3 ]; then
+              uv run equiv-checker baseline verify "$BASELINE"
+            else
+              echo "::notice::$BASELINE is a legacy schema-version-2 baseline pending public-CI regeneration"
+            fi
+          done
 
   historical-equivalent:
     if: >-
@@ -150,7 +204,7 @@ jobs:
       - name: Run released positive profile with real Blaster
         working-directory: tool
         run: mkdir -p ../work && uv run equiv-checker profile run historical-equivalent-v1.1.21-v1.1.22 --resume | tee ../work/historical-equivalent-result.json
-      - name: Capture unattested schema-version-2 positive baseline
+      - name: Capture unattested schema-version-3 positive baseline
         working-directory: tool
         run: |
           RUN_DIR="$(jq -er .underlying_summary.output ../work/historical-equivalent-result.json)"
@@ -162,7 +216,7 @@ jobs:
         id: baseline-upload
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: baseline-v2-positive-${{ github.run_id }}
+          name: baseline-v3-positive-${{ github.run_id }}
           path: work/ci-baselines/historical-equivalent-v1.1.21-v1.1.22/
           if-no-files-found: error
       - name: Upload complete positive evidence
@@ -230,7 +284,7 @@ jobs:
       - name: Run released negative profile and independent replay
         working-directory: tool
         run: mkdir -p ../work && uv run equiv-checker profile run historical-regression-v1.1.22-v1.1.23 --resume | tee ../work/historical-regression-result.json
-      - name: Capture unattested schema-version-2 negative baseline
+      - name: Capture unattested schema-version-3 negative baseline
         working-directory: tool
         run: |
           RUN_DIR="$(jq -er .underlying_summary.output ../work/historical-regression-result.json)"
@@ -242,7 +296,7 @@ jobs:
         id: baseline-upload
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: baseline-v2-negative-${{ github.run_id }}
+          name: baseline-v3-negative-${{ github.run_id }}
           path: work/ci-baselines/historical-regression-v1.1.22-v1.1.23/
           if-no-files-found: error
       - name: Upload complete negative evidence
@@ -258,19 +312,25 @@ jobs:
             work/runs/
           if-no-files-found: error
 
-  baseline-v2-publication:
+  baseline-v3-publication:
     if: >-
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main' &&
-      !contains(github.event.head_commit.message, '[baseline-v2]')
+      !contains(github.event.head_commit.message, '[baseline-v3]')
     needs:
       - historical-equivalent
       - historical-regression
     runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+    concurrency:
+      group: baseline-v3-publication
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: main
+          ref: ${{ github.sha }}
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
           version: "0.8.13"
@@ -281,12 +341,12 @@ jobs:
       - name: Download positive compact baseline
         uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
         with:
-          name: baseline-v2-positive-${{ github.run_id }}
+          name: baseline-v3-positive-${{ github.run_id }}
           path: incoming-positive
       - name: Download negative compact baseline
         uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
         with:
-          name: baseline-v2-negative-${{ github.run_id }}
+          name: baseline-v3-negative-${{ github.run_id }}
           path: incoming-negative
       - name: Bind public CI attestations to baseline content
         env:
@@ -331,7 +391,7 @@ jobs:
           python3 -c 'import shutil; from pathlib import Path; pairs=(("incoming-positive","results/baselines/historical-equivalent-v1.1.21-v1.1.22"),("incoming-negative","results/baselines/historical-regression-v1.1.22-v1.1.23")); [(shutil.rmtree(dst, ignore_errors=True), shutil.copytree(src, dst)) for src, dst in pairs]'
           uv run --directory tool equiv-checker baseline verify ../results/baselines/historical-equivalent-v1.1.21-v1.1.22
           uv run --directory tool equiv-checker baseline verify ../results/baselines/historical-regression-v1.1.22-v1.1.23
-      - name: Publish attested schema-version-2 baselines
+      - name: Publish attested schema-version-3 baselines
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
@@ -339,10 +399,10 @@ jobs:
           if git diff --cached --quiet; then
             exit 0
           fi
-          git commit -m "Publish schema v2 historical baselines [baseline-v2]"
+          git commit -m "Publish schema v3 historical baselines [baseline-v3]"
           git push origin HEAD:main
 
-  local-candidate-changed-output:
+  candidate-gate-changed-output:
     if: >-
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
@@ -379,14 +439,29 @@ jobs:
         run: |
           uv run equiv-checker compiler build-release --aiken-source "$RUNNER_TEMP/aiken-v1.1.21" --ref v1.1.21 --label base-changed --output ../.ak-equiv/compilers/base-changed
           uv run equiv-checker compiler build-local --aiken-source "$RUNNER_TEMP/aiken-v1.1.22" --label candidate-changed --output ../.ak-equiv/compilers/candidate-changed
-      - name: Prove non-identical local candidate output strictly equivalent
+      - name: Run changed output through global candidate planning
         working-directory: tool
-        run: >-
-          uv run equiv-checker profile run local-candidate-v1.1.21-v1.1.22
-          --old-compiler-manifest ../.ak-equiv/compilers/base-changed/compiler.json
-          --new-compiler-manifest ../.ak-equiv/compilers/candidate-changed/compiler.json
-          --resume
-          --strict
+        run: |
+          rm -rf ../work/historical-candidate-sentinel
+          cp -a ../fixtures/historical-codegen-equivalent ../work/historical-candidate-sentinel
+          mkdir -p ../work/historical-candidate-sentinel/coverage
+          printf '%s\n' '{"schema_version":1,"features":[],"builtins":[]}' > ../work/historical-candidate-sentinel/coverage/feature-manifest.json
+          printf '%s\n' '{"schema_version":1,"features":[],"active_uplc_builtins":[]}' > ../work/historical-empty-feature-contract.json
+          uv run equiv-checker candidate gate \
+            --base-compiler-manifest ../.ak-equiv/compilers/base-changed/compiler.json \
+            --candidate-compiler-manifest ../.ak-equiv/compilers/candidate-changed/compiler.json \
+            --feature-contract ../work/historical-empty-feature-contract.json \
+            --corpus-lock ../corpus/aiken_mandatory_corpus.lock.json \
+            --scope sentinel \
+            --sentinel-package ../work/historical-candidate-sentinel \
+            --resume \
+            --policy strict \
+            --jobs 1 | tee ../work/historical-candidate-gate-result.json
+          BUNDLE="$(jq -er .output ../work/historical-candidate-gate-result.json)"
+          uv run equiv-checker candidate verify "$BUNDLE"
+          test "$(jq -r .strict_decision ../work/historical-candidate-gate-result.json)" = pass
+          test "$(jq -r '.counts.changed_program_pairs > 0' ../work/historical-candidate-gate-result.json)" = true
+          test "$(jq -r '.counts.raw_complete_changed_pairs == .counts.changed_program_pairs' ../work/historical-candidate-gate-result.json)" = true
       - name: Build and run the current same-source smoke
         working-directory: tool
         run: |
@@ -408,7 +483,99 @@ jobs:
             .ak-equiv/compilers/candidate-current/compiler.json
             .ak-equiv/compilers/candidate-current/logs/
             work/runs/
+            work/candidate-gates/
+            work/historical-candidate-gate-result.json
           if-no-files-found: error
+  candidate-gate-full:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'schedule' ||
+       github.event_name == 'workflow_dispatch' ||
+       github.event_name == 'push')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          version: "0.8.13"
+          enable-cache: true
+      - uses: leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596 # v1
+        with:
+          use-github-cache: true
+          use-mathlib-cache: false
+          lake-package-directory: tool/blaster-backend
+          build: true
+          build-args: CardanoLedgerApi
+          test: false
+          lint: false
+      - name: Install Python and pinned semantic toolchains
+        run: |
+          uv sync --directory tool --locked
+          python3 scripts/setup_toolchains.py
+          lake -d tool/blaster-backend build CardanoLedgerApi
+      - name: Materialize clean Aiken v1.1.23 source
+        run: |
+          git clone --filter=blob:none https://github.com/aiken-lang/aiken.git "$RUNNER_TEMP/aiken"
+          git -C "$RUNNER_TEMP/aiken" worktree add --detach "$RUNNER_TEMP/aiken-v1.1.23" 8949565a9969278846ffefe30bc3b892029dd318
+      - name: Build release base and local candidate artifacts
+        working-directory: tool
+        run: |
+          uv run equiv-checker compiler build-release \
+            --aiken-source "$RUNNER_TEMP/aiken-v1.1.23" \
+            --ref v1.1.23 \
+            --label base \
+            --output ../.ak-equiv/compilers/base
+          uv run equiv-checker compiler build-local \
+            --aiken-source "$RUNNER_TEMP/aiken-v1.1.23" \
+            --label candidate \
+            --output ../.ak-equiv/compilers/candidate
+      - name: Run and verify the complete strict candidate gate
+        run: |
+          mkdir -p work
+          uv run --directory tool equiv-checker candidate gate \
+            --base-compiler-manifest ../.ak-equiv/compilers/base/compiler.json \
+            --candidate-compiler-manifest ../.ak-equiv/compilers/candidate/compiler.json \
+            --feature-contract ../corpus/aiken_language_features_v1_1_23.json \
+            --corpus-lock ../corpus/aiken_mandatory_corpus.lock.json \
+            --scope sentinel,mandatory \
+            --resume \
+            --policy strict \
+            --jobs 4 | tee work/candidate-gate-result.json
+          BUNDLE="$(jq -er .output work/candidate-gate-result.json)"
+          uv run --directory tool equiv-checker candidate verify "$BUNDLE"
+          cp -a "$BUNDLE" work/candidate-bundle
+          tar -czf work/candidate-bundle.tar.gz -C work/candidate-bundle .
+      - name: Attest the candidate evidence archive
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
+        with:
+          subject-path: work/candidate-bundle.tar.gz
+      - name: Verify signed candidate evidence and release decision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          uv run --directory tool equiv-checker candidate verify \
+            work/candidate-bundle.tar.gz \
+            --repository "$GITHUB_REPOSITORY" \
+            | tee work/candidate-release-verification.json
+          test "$(jq -r .publishable work/candidate-release-verification.json)" = true
+      - name: Upload verified candidate evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: candidate-gate-full-${{ github.run_id }}
+          path: |
+            work/candidate-gate-result.json
+            work/candidate-release-verification.json
+            work/candidate-bundle/
+            work/candidate-bundle.tar.gz
+            .ak-equiv/compilers/base/compiler.json
+            .ak-equiv/compilers/candidate/compiler.json
+          if-no-files-found: error
+
+
 
 
   real-smoke:

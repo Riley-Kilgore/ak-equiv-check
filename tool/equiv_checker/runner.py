@@ -12,7 +12,14 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
-from .evidence import GENERATED_LEAN_SCHEMA_VERSION
+from .evidence import (
+    GENERATED_LEAN_SCHEMA_VERSION,
+    candidate_witness_id,
+    checker_implementation_id,
+    obligation_result_id,
+    platform_identity,
+    replay_id,
+)
 from .blaster import RealBlasterBackend
 from .blueprints import inspect_blueprint
 from .census import census, ensure_shim, inspect_uplc
@@ -72,14 +79,21 @@ def _ignored(relative: Path) -> bool:
     )
 
 
-def hash_package_tree(package: Path, *, include_lock: bool) -> str:
+def hash_package_tree(
+    package: Path,
+    *,
+    include_lock: bool,
+    exclude_top_level: frozenset[str] = frozenset(),
+) -> str:
     digest = hashlib.sha256()
     for path in sorted(
         candidate for candidate in package.rglob("*") if candidate.is_file()
     ):
         relative = path.relative_to(package)
-        if _ignored(relative) or (
-            not include_lock and relative.as_posix() == "aiken.lock"
+        if (
+            _ignored(relative)
+            or relative.parts[0] in exclude_top_level
+            or (not include_lock and relative.as_posix() == "aiken.lock")
         ):
             continue
         digest.update(relative.as_posix().encode("utf-8"))
@@ -87,6 +101,36 @@ def hash_package_tree(package: Path, *, include_lock: bool) -> str:
         digest.update(path.read_bytes())
         digest.update(b"\0")
     return digest.hexdigest()
+
+def _normalized_dependency_lock(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(key): _normalized_dependency_lock(child)
+            for key, child in value.items()
+            if key not in {"secs_since_epoch", "nanos_since_epoch"}
+        }
+    if isinstance(value, list):
+        return [_normalized_dependency_lock(child) for child in value]
+    return value
+
+
+def dependency_graph_sha256(lock_path: Path) -> str | None:
+    if not lock_path.is_file():
+        return None
+    raw = lock_path.read_bytes()
+    try:
+        lock = tomllib.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError):
+        payload = {
+            "schema_version": "aiken-dependency-graph/v1",
+            "unparsed_lock_sha256": hashlib.sha256(raw).hexdigest(),
+        }
+    else:
+        payload = {
+            "schema_version": "aiken-dependency-graph/v1",
+            "lock": _normalized_dependency_lock(lock),
+        }
+    return hashlib.sha256(canonical_json(payload).encode("utf-8")).hexdigest()
 
 
 def _compiler_evidence_identity(compiler: Compiler) -> dict[str, Any]:
@@ -106,34 +150,8 @@ def _compiler_evidence_identity(compiler: Compiler) -> dict[str, Any]:
 
 
 def checker_implementation_sha256() -> str:
-    digest = hashlib.sha256()
-    package_root = Path(__file__).resolve().parent
-    filenames = (
-        "blaster.py",
-        "census.py",
-        "config.py",
-        "corpus.py",
-        "models.py",
-        "pairing.py",
-        "pipeline.py",
-        "process.py",
-        "runner.py",
-        "semantics.py",
-    )
-    for filename in filenames:
-        path = package_root / filename
-        digest.update(filename.encode("utf-8"))
-        digest.update(b"\0")
-        digest.update(path.read_bytes())
-        digest.update(b"\0")
-    schema_root = package_root.parent / "schemas"
-    for path in sorted(schema_root.glob("*.json")):
-        relative = f"schemas/{path.name}"
-        digest.update(relative.encode("utf-8"))
-        digest.update(b"\0")
-        digest.update(path.read_bytes())
-        digest.update(b"\0")
-    return digest.hexdigest()
+    """Compatibility alias for the complete checker implementation tree ID."""
+    return checker_implementation_id()
 
 
 
@@ -289,6 +307,7 @@ def _build_one(
         if (source / "aiken.lock").is_file()
         else None
     )
+    dependency_graph_before = dependency_graph_sha256(source / "aiken.lock")
     logs = bundle_root / "logs"
     build_command = [str(compiler.executable), "build", "--out", "plutus.json"]
     build = run_process(
@@ -425,6 +444,7 @@ def _build_one(
         if (source / "aiken.lock").is_file()
         else None
     )
+    dependency_graph_after = dependency_graph_sha256(source / "aiken.lock")
     if (source / "aiken.lock").is_file():
         lock_artifact = raw_root / "aiken.lock"
         lock_artifact.parent.mkdir(parents=True, exist_ok=True)
@@ -442,7 +462,12 @@ def _build_one(
         "source_unchanged": source_before == source_after,
         "dependency_lock_hash_before": lock_before,
         "dependency_lock_hash_after": lock_after,
-        "dependency_lock_unchanged": lock_before == lock_after,
+        "dependency_graph_before": dependency_graph_before,
+        "dependency_graph_after": dependency_graph_after,
+        "dependency_lock_unchanged": (
+            dependency_graph_before == dependency_graph_after
+        ),
+        "dependency_lock_bytes_unchanged": lock_before == lock_after,
         "primary_exit_code": build.exit_code,
         "build_timed_out": build.timed_out,
         "uplc_extraction_exit_code": extraction_exit_code,
@@ -1563,7 +1588,7 @@ def compare_package(
     if not all(build["dependency_lock_unchanged"] for build in builds.values()):
         gaps.append("compiler_changed_dependency_lock")
     resolved_locks = {
-        builds[label]["dependency_lock_hash_after"] for label in ("old", "new")
+        builds[label]["dependency_graph_after"] for label in ("old", "new")
     }
     if len(resolved_locks) != 1:
         gaps.append("compiler_dependency_locks_differ")
@@ -1597,7 +1622,7 @@ def compare_package(
             package_identity=source_metadata.get(
                 "logical_identity", source_metadata["identity"]
             ),
-            package_path=str(package),
+            package_path=str(source_metadata["package_path"]),
             plutus_version=_plutus_version(package),
             covered_features_by_title=coverage_map,
             old_abi_inspection=builds["old"]["abi_inspection"],
@@ -1635,6 +1660,8 @@ def compare_package(
         def planned_obligations(
             pair: ProgramPairRecord, model: InputModel
         ) -> list[dict[str, Any]]:
+            if not model.supported:
+                return []
             kinds = (
                 (
                     "ledger_domain_non_vacuity",
@@ -1991,20 +2018,86 @@ def compare_package(
 
     semantic_obligations_by_id: dict[str, dict[str, Any]] = {}
     obligation_results: list[dict[str, Any]] = []
+    execution_attempts_by_id: dict[str, dict[str, Any]] = {}
+    witnesses_by_id: dict[str, dict[str, Any]] = {}
+    replays_by_id: dict[str, dict[str, Any]] = {}
+    model_omissions: list[dict[str, Any]] = []
+    checker = config.checker_configuration()
+    execution_platform = platform_identity()
+
+    def terminal_obligation_status(
+        proof_status: str | None, model_status: str
+    ) -> str:
+        if proof_status in {"proven", "valid", "falsified"}:
+            return proof_status
+        if proof_status == "inconclusive":
+            return "inconclusive"
+        if model_status == "blaster_timeout":
+            return "timeout"
+        if "unsupported" in model_status:
+            return "unsupported"
+        if model_status in {"blaster_error", "domain_non_vacuous_failed"}:
+            return "tool_error" if model_status == "blaster_error" else "invalid"
+        if model_status == "bounded_equivalent":
+            return "bounded"
+        if model_status == "blaster_inconclusive":
+            return "inconclusive"
+        return "invalid"
+
     for row in pair_results:
         program_pair_id_value = row.get("program_pair_id")
         if not isinstance(program_pair_id_value, str):
             continue
         for model_record in row.get("model_results", {}).values():
+            input_model_record = model_record.get("input_model", {})
+            planned_kinds = (
+                [
+                    "ledger_domain_non_vacuity",
+                    "old_program_completion",
+                    "new_program_completion",
+                    "ledger_observational_equivalence",
+                ]
+                if str(input_model_record.get("profile", "")).startswith(
+                    "ledger-valid"
+                )
+                else [
+                    "domain_non_vacuity",
+                    "old_program_completion",
+                    "new_program_completion",
+                    "observational_equivalence",
+                ]
+            )
+            if (
+                input_model_record.get("supported") is False
+                and not model_record.get("semantic_obligations")
+            ):
+                model_omissions.append(
+                    {
+                        "semantic_model_id": model_record["semantic_model_id"],
+                        "program_pair_id": program_pair_id_value,
+                        "status": "ledger_model_unsupported",
+                        "reason": input_model_record.get("unsupported_reason"),
+                        "planned_obligation_kinds": planned_kinds,
+                    }
+                )
+                continue
             backend_record = model_record.get("backend")
             proof_results = (
                 backend_record.get("proof_obligations", {})
                 if isinstance(backend_record, dict)
                 else {}
             )
-            for obligation in model_record.get(
-                "semantic_obligations", []
-            ):
+            phases = (
+                backend_record.get("phase_results", [])
+                if isinstance(backend_record, dict)
+                else []
+            )
+            phase_rows = [phase for phase in phases if isinstance(phase, dict)]
+            planned_ids = sorted(
+                obligation["logical_obligation_id"]
+                for obligation in model_record.get("semantic_obligations", [])
+            )
+            for obligation in model_record.get("semantic_obligations", []):
                 obligation_id = obligation["logical_obligation_id"]
                 previous = semantic_obligations_by_id.setdefault(
                     obligation_id, obligation
@@ -2013,53 +2106,206 @@ def compare_package(
                     raise RuntimeError(
                         f"conflicting semantic obligation {obligation_id}"
                     )
-                proof = proof_results.get(
-                    obligation["obligation_kind"], {}
+                proof = proof_results.get(obligation["obligation_kind"], {})
+                generated_source_sha256 = proof.get("generated_lean_sha256")
+                matching_phases = [
+                    (index, phase)
+                    for index, phase in enumerate(phase_rows, start=1)
+                    if generated_source_sha256 is not None
+                    and phase.get("generated_lean_sha256")
+                    == generated_source_sha256
+                ]
+                if matching_phases:
+                    phase_index, phase = matching_phases[-1]
+                elif phase_rows:
+                    phase_index, phase = len(phase_rows), phase_rows[-1]
+                    generated_source_sha256 = phase.get(
+                        "generated_lean_sha256"
+                    )
+                else:
+                    phase_index, phase = 1, {}
+                execution_sequence = (
+                    (int(row.get("attempt_sequence", 1)) - 1) * 1000
+                    + phase_index
                 )
-                result_status = proof.get(
-                    "status", model_record["status"]
+                execution_plan = {
+                    "kind": (
+                        "generated_lean_process"
+                        if phase
+                        else "terminal_without_process"
+                    ),
+                    "program_pair_id": program_pair_id_value,
+                    "semantic_model_id": obligation["semantic_model_id"],
+                    "planned_logical_obligation_ids": planned_ids,
+                    "phase": phase.get("phase", "scheduler_terminalization"),
+                    "command": [
+                        (
+                            f"<absolute-diagnostic:{Path(str(value)).name}>"
+                            if Path(str(value)).is_absolute()
+                            else str(value)
+                        )
+                        for value in phase.get("command", [])
+                    ],
+                    "effective_options": phase.get("effective_options", {}),
+                }
+                obligation_record = SemanticObligationRecord(
+                    **obligation
                 )
-                result_identity = {
-                    "logical_obligation_id": obligation_id,
-                    "checker_configuration_id": config.checker_configuration()[
+                execution_attempt_id_value = (
+                    obligation_record.execution_attempt_id(
+                        config,
+                        execution_plan=execution_plan,
+                        generated_source_sha256=generated_source_sha256,
+                        execution_sequence=execution_sequence,
+                        platform=execution_platform,
+                    )
+                )
+                execution_record = {
+                    "execution_attempt_id": execution_attempt_id_value,
+                    "checker_configuration_id": checker[
                         "checker_configuration_id"
                     ],
-                    "attempt_id": row["attempt_id"],
-                    "status": result_status,
-                    "generated_lean_sha256": proof.get(
-                        "generated_lean_sha256"
+                    "checker_implementation_id": checker[
+                        "checker_implementation_id"
+                    ],
+                    "execution_plan": execution_plan,
+                    "generated_source_sha256": generated_source_sha256,
+                    "process_timeouts": asdict(config.timeouts),
+                    "random_seed": config.random_seed,
+                    "platform_identity": execution_platform,
+                    "execution_sequence": execution_sequence,
+                    "command": phase.get("command"),
+                    "exit_code": phase.get("exit_code"),
+                    "timed_out": bool(phase.get("timed_out", False)),
+                    "duration_seconds": float(
+                        phase.get("duration_seconds", 0.0)
                     ),
-                    "witness_sha256": (
-                        backend_record.get("witness", {}).get(
-                            "witness_sha256"
-                        )
-                        if isinstance(backend_record, dict)
-                        and isinstance(
-                            backend_record.get("witness"), dict
-                        )
-                        else None
+                    "stdout_path": phase.get("stdout_path"),
+                    "stderr_path": phase.get("stderr_path"),
+                }
+                existing_execution = execution_attempts_by_id.setdefault(
+                    execution_attempt_id_value, execution_record
+                )
+                if existing_execution != execution_record:
+                    raise RuntimeError(
+                        "conflicting execution attempt "
+                        f"{execution_attempt_id_value}"
+                    )
+                relevant_solver_options = {
+                    **phase.get("effective_options", {}),
+                    "solver": config.solver,
+                    "solver_timeout": config.timeouts.z3,
+                }
+                attempt_sequence = int(row.get("attempt_sequence", 1))
+                obligation_attempt_id_value = (
+                    obligation_record.obligation_attempt_id(
+                        config,
+                        execution_attempt_id_value=execution_attempt_id_value,
+                        relevant_solver_options=relevant_solver_options,
+                        attempt_sequence=attempt_sequence,
+                    )
+                )
+                witness_reference = None
+                raw_witness = (
+                    backend_record.get("witness")
+                    if isinstance(backend_record, dict)
+                    else None
+                )
+                if (
+                    obligation["obligation_kind"]
+                    in {
+                        "observational_equivalence",
+                        "ledger_observational_equivalence",
+                    }
+                    and isinstance(raw_witness, dict)
+                    and raw_witness.get("logical_obligation_id")
+                    == obligation_id
+                ):
+                    witness_record = {
+                        **raw_witness,
+                        "producing_logical_obligation_id": obligation_id,
+                        "producing_obligation_attempt_id": (
+                            obligation_attempt_id_value
+                        ),
+                        "producing_execution_attempt_id": (
+                            execution_attempt_id_value
+                        ),
+                    }
+                    witness_identity = candidate_witness_id(witness_record)
+                    witness_record["witness_id"] = witness_identity
+                    witnesses_by_id[witness_identity] = witness_record
+                    witness_reference = witness_identity
+                replay_reference = None
+                model_replay = model_record.get("counterexample_replay")
+                if (
+                    witness_reference is not None
+                    and isinstance(model_replay, dict)
+                    and obligation["obligation_kind"]
+                    in {
+                        "observational_equivalence",
+                        "ledger_observational_equivalence",
+                    }
+                ):
+                    replay_record = {
+                        **model_replay,
+                        "logical_obligation_id": obligation_id,
+                        "obligation_attempt_id": obligation_attempt_id_value,
+                        "execution_attempt_id": execution_attempt_id_value,
+                        "witness_id": witness_reference,
+                        "old_program_artifact_id": row[
+                            "old_program_artifact"
+                        ]["program_artifact_id"],
+                        "new_program_artifact_id": row[
+                            "new_program_artifact"
+                        ]["program_artifact_id"],
+                        "old_script_sha256": row["old_program_artifact"][
+                            "script_sha256"
+                        ],
+                        "new_script_sha256": row["new_program_artifact"][
+                            "script_sha256"
+                        ],
+                    }
+                    replay_identity = replay_id(replay_record)
+                    replay_record["replay_id"] = replay_identity
+                    replays_by_id[replay_identity] = replay_record
+                    replay_reference = replay_identity
+                result_identity = {
+                    "logical_obligation_id": obligation_id,
+                    "obligation_attempt_id": obligation_attempt_id_value,
+                    "execution_attempt_id": execution_attempt_id_value,
+                    "checker_configuration_id": checker[
+                        "checker_configuration_id"
+                    ],
+                    "checker_implementation_id": checker[
+                        "checker_implementation_id"
+                    ],
+                    "program_pair_id": program_pair_id_value,
+                    "semantic_model_id": obligation[
+                        "semantic_model_id"
+                    ],
+                    "obligation_kind": obligation["obligation_kind"],
+                    "status": terminal_obligation_status(
+                        proof.get("status"), model_record["status"]
                     ),
+                    "generated_source_sha256": generated_source_sha256,
+                    "solver_status": proof.get("solver_status"),
+                    "witness_reference": witness_reference,
+                    "replay_reference": replay_reference,
+                    "relevant_solver_options": relevant_solver_options,
+                    "attempt_sequence": attempt_sequence,
                 }
                 obligation_results.append(
                     {
-                        "evidence_result_id": stable_hash(
+                        "evidence_result_id": obligation_result_id(
                             result_identity
                         ),
                         **result_identity,
-                        "program_pair_id": program_pair_id_value,
-                        "semantic_model_id": obligation[
-                            "semantic_model_id"
-                        ],
-                        "obligation_kind": obligation[
-                            "obligation_kind"
-                        ],
                         "generated_source_schema_version": (
                             GENERATED_LEAN_SCHEMA_VERSION
                         ),
-                        "generated_lean_path": proof.get(
+                        "generated_source_path": proof.get(
                             "generated_lean_path"
                         ),
-                        "solver_status": proof.get("solver_status"),
                         "reused": row.get("evidence_reuse")
                         is not None,
                     }
@@ -2079,7 +2325,7 @@ def compare_package(
     obligation_results.sort(
         key=lambda row: (
             row["logical_obligation_id"],
-            row["attempt_id"],
+            row["obligation_attempt_id"],
         )
     )
     write_json(
@@ -2090,6 +2336,47 @@ def compare_package(
             "records": obligation_results,
         },
     )
+    for filename, records in (
+        (
+            "execution-attempts.json",
+            sorted(
+                execution_attempts_by_id.values(),
+                key=lambda item: item["execution_attempt_id"],
+            ),
+        ),
+        (
+            "witnesses.json",
+            sorted(
+                witnesses_by_id.values(),
+                key=lambda item: item["witness_id"],
+            ),
+        ),
+        (
+            "replays.json",
+            sorted(
+                replays_by_id.values(),
+                key=lambda item: item["replay_id"],
+            ),
+        ),
+        (
+            "semantic-model-omissions.json",
+            sorted(
+                model_omissions,
+                key=lambda item: (
+                    item["program_pair_id"],
+                    item["semantic_model_id"],
+                ),
+            ),
+        ),
+    ):
+        write_json(
+            bundle_root / filename,
+            {
+                "schema_version": CHECKER_SCHEMA_VERSION,
+                "record_count": len(records),
+                "records": records,
+            },
+        )
     write_json(
         bundle_root / "validator-links.json",
         {

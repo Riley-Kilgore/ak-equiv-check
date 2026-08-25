@@ -13,6 +13,7 @@ from .evidence import (
     RESULT_PROTOCOL,
     WITNESS_PROTOCOL,
     canonical_json,
+    checker_implementation_id,
     theorem_statement_hash,
     validate_result_marker,
     validate_witness_record,
@@ -29,8 +30,11 @@ from .models import (
 from .process import ProcessResult, run_process, write_process_logs
 
 
-RESULT_PREFIX = "EQUIV_RESULT_V2:"
-WITNESS_PREFIX = "EQUIV_WITNESS_V2:"
+RESULT_PREFIX = "EQUIV_RESULT_V3:"
+WITNESS_PREFIX = "EQUIV_WITNESS_V3:"
+LEGACY_RESULT_PREFIX = "EQUIV_RESULT_V2:"
+LEGACY_WITNESS_PREFIX = "EQUIV_WITNESS_V2:"
+CHECKER_IMPLEMENTATION_ID = checker_implementation_id()
 
 
 def _stable_json(value: Any) -> str:
@@ -146,13 +150,15 @@ def parse_result_protocol(
     expected: dict[str, Any],
 ) -> dict[str, Any]:
     markers = [
-        line[len(RESULT_PREFIX) :]
+        line[len(prefix) :]
         for line in f"{stdout}\n{stderr}".splitlines()
-        if line.startswith(RESULT_PREFIX)
+        for prefix in (RESULT_PREFIX, LEGACY_RESULT_PREFIX)
+        if line.startswith(prefix)
     ]
     if len(markers) != 1:
         raise ValueError(
-            f"expected exactly one {RESULT_PREFIX} marker, found {len(markers)}"
+            "expected exactly one EQUIV_RESULT protocol marker, "
+            f"found {len(markers)}"
         )
     try:
         value = json.loads(markers[0])
@@ -173,15 +179,17 @@ def parse_witness_protocol(
     expected: dict[str, Any],
 ) -> dict[str, Any] | None:
     markers = [
-        line[len(WITNESS_PREFIX) :]
+        line[len(prefix) :]
         for line in f"{stdout}\n{stderr}".splitlines()
-        if line.startswith(WITNESS_PREFIX)
+        for prefix in (WITNESS_PREFIX, LEGACY_WITNESS_PREFIX)
+        if line.startswith(prefix)
     ]
     if not markers:
         return None
     if len(markers) != 1:
         raise ValueError(
-            f"expected at most one {WITNESS_PREFIX} marker, found {len(markers)}"
+            "expected at most one EQUIV_WITNESS protocol marker, "
+            f"found {len(markers)}"
         )
     try:
         value = json.loads(markers[0])
@@ -620,6 +628,7 @@ def _witness_expected(
         "ordered_argument_list": list(input_model.argument_order),
         "argument_names": list(input_model.argument_order),
         "argument_types": [row["type"] for row in input_model.variables],
+        "checker_implementation_id": CHECKER_IMPLEMENTATION_ID,
     }
 
 
@@ -765,6 +774,7 @@ def _obligation_binding(
         "logical_obligation_id": obligation.logical_obligation_id,
         "semantic_model_id": obligation.semantic_model_id,
         "checker_configuration_id": checker_configuration_id,
+        "checker_implementation_id": CHECKER_IMPLEMENTATION_ID,
         "old_script_sha256": pair.old_script.sha256,
         "new_script_sha256": pair.new_script.sha256,
         "verified_abi_id": pair.verified_abi_id,

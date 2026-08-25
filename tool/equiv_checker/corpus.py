@@ -6,7 +6,7 @@ import re
 import shutil
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 from jsonschema import Draft202012Validator
 
@@ -17,6 +17,7 @@ from .process import ProcessResult, run_process, write_process_logs
 from .runner import (
     checker_implementation_sha256,
     compare_package,
+    dependency_graph_sha256,
     hash_package_tree,
     write_json,
 )
@@ -452,6 +453,35 @@ def _lane_command(lane: str, compiler: Compiler) -> list[str]:
         return [executable, "docs"]
     raise ValueError(f"lane {lane} has no direct compiler command")
 
+def _dependency_graph_hash(package: Path) -> str | None:
+    return dependency_graph_sha256(package / "aiken.lock")
+
+
+def _compiler_inputs_unchanged(
+    result: Mapping[str, Any] | None,
+    *,
+    expected_source_hash: str,
+    expected_dependency_graph: str | None,
+) -> bool:
+    if result is None:
+        return True
+    dependency_before = result.get(
+        "dependency_graph_before",
+        result.get("dependency_lock_hash_before"),
+    )
+    dependency_after = result.get(
+        "dependency_graph_after",
+        result.get("dependency_lock_hash_after"),
+    )
+    return bool(
+        result.get("source_hash_before") == expected_source_hash
+        and result.get("source_hash_before") == result.get("source_hash_after")
+        and dependency_before == expected_dependency_graph
+        and dependency_before == dependency_after
+        and result.get("source_unchanged", True) is not False
+        and result.get("dependency_lock_unchanged", True) is not False
+    )
+
 
 def _run_lane_compiler(
     lane: str,
@@ -462,8 +492,33 @@ def _run_lane_compiler(
 ) -> dict[str, Any]:
     compiler_package = lane_root / compiler.label / "package"
     shutil.copytree(package, compiler_package)
+    source_hash_options = {
+        "include_lock": False,
+        "exclude_top_level": (
+            frozenset({"docs"}) if lane == "docs" else frozenset()
+        ),
+    }
+    source_hash_before = hash_package_tree(
+        compiler_package, **source_hash_options
+    )
+    dependency_lock_path = compiler_package / "aiken.lock"
+    dependency_lock_before = (
+        sha256_file(dependency_lock_path)
+        if dependency_lock_path.is_file()
+        else None
+    )
+    dependency_graph_before = _dependency_graph_hash(compiler_package)
     command = _lane_command(lane, compiler)
     result = run_process(command, compiler_package, timeout, inherit_environment=False)
+    source_hash_after = hash_package_tree(
+        compiler_package, **source_hash_options
+    )
+    dependency_lock_after = (
+        sha256_file(dependency_lock_path)
+        if dependency_lock_path.is_file()
+        else None
+    )
+    dependency_graph_after = _dependency_graph_hash(compiler_package)
     logs = lane_root / "logs"
     stdout_path = logs / f"{compiler.label}.stdout.log"
     stderr_path = logs / f"{compiler.label}.stderr.log"
@@ -478,6 +533,12 @@ def _run_lane_compiler(
         "stderr_sha256": sha256_file(stderr_path),
         "diagnostic_text": (result.stdout + "\n" + result.stderr).strip(),
         "environment_inherited": False,
+        "source_hash_before": source_hash_before,
+        "source_hash_after": source_hash_after,
+        "dependency_graph_before": dependency_graph_before,
+        "dependency_graph_after": dependency_graph_after,
+        "dependency_lock_sha256_before": dependency_lock_before,
+        "dependency_lock_sha256_after": dependency_lock_after,
     }
 
 
@@ -488,15 +549,9 @@ def _materialize_dependency_lock(
     timeout: float,
 ) -> dict[str, Any]:
     lock_path = package / "aiken.lock"
-    if lock_path.is_file():
-        return {
-            "status": "already_locked",
-            "compiler": compiler.identity(),
-            "dependency_lock_sha256": sha256_file(lock_path),
-            "command": None,
-            "exit_code": None,
-            "timed_out": False,
-        }
+    initial_lock_sha256 = (
+        sha256_file(lock_path) if lock_path.is_file() else None
+    )
     materialization_root = task_root / "dependency-materialization"
     compiler_package = materialization_root / "package"
     if materialization_root.exists():
@@ -517,9 +572,7 @@ def _materialize_dependency_lock(
     generated_lock = compiler_package / "aiken.lock"
     status = (
         "materialized"
-        if process.exit_code == 0
-        and not process.timed_out
-        and generated_lock.is_file()
+        if not process.timed_out and generated_lock.is_file()
         else "materialization_failed"
     )
     lock_sha256 = (
@@ -532,6 +585,7 @@ def _materialize_dependency_lock(
     return {
         "status": status,
         "compiler": compiler.identity(),
+        "initial_dependency_lock_sha256": initial_lock_sha256,
         "dependency_lock_sha256": lock_sha256,
         "command": command,
         "exit_code": process.exit_code,
@@ -716,9 +770,18 @@ def _execute_task(
         "lane": task["lane"],
         "expected_outcome": task["expected_outcome"],
         "strict_policy": LANE_STRICT_POLICY[task["lane"]],
+        "strict_relevance": True,
         "adapter": adapter_record,
+        "adapter_hash": adapter_hash,
         "source_hash": task["source_hash"],
+        "source_hash_before": task["source_hash"],
+        "source_hash_after": task["source_hash"],
         "dependency_lock_hash": task["dependency_lock_hash"],
+        "dependency_graph_before": task["dependency_lock_hash"],
+        "dependency_graph_after": task["dependency_lock_hash"],
+        "timeout_seconds": float(
+            task["timeout_seconds"] or config.timeouts.aiken_build
+        ),
         "execution_policy": {
             "isolated_source_copy": True,
             "inherited_environment": False,
@@ -734,33 +797,53 @@ def _execute_task(
             "strict_pass": False,
             "old_result": None,
             "new_result": None,
+            "source_immutable": False,
         }
         write_json(task_root / "result.json", result)
         return result
+    base["source_hash_before"] = hash_package_tree(
+        package, include_lock=False
+    )
+    base["source_hash_after"] = base["source_hash_before"]
+    base["dependency_graph_before"] = _dependency_graph_hash(package)
+    base["dependency_graph_after"] = base["dependency_graph_before"]
 
-    if task["lane"] == "equivalence":
-        materialization = _materialize_dependency_lock(
-            package,
-            compilers[0],
-            task_root,
-            float(task["timeout_seconds"] or config.timeouts.aiken_build),
+    materialization = _materialize_dependency_lock(
+        package,
+        compilers[0],
+        task_root,
+        float(task["timeout_seconds"] or config.timeouts.aiken_build),
+    )
+    base["dependency_materialization"] = materialization
+    if (
+        materialization["status"] == "materialization_failed"
+        and task["lane"] != "negative-diagnostic"
+    ):
+        base["source_hash_after"] = hash_package_tree(
+            package, include_lock=False
         )
-        base["dependency_materialization"] = materialization
-        if materialization["status"] == "materialization_failed":
-            result = base | {
-                "classification": "dependency_materialization_failed",
-                "strict_pass": False,
-                "old_result": None,
-                "new_result": None,
-            }
-            write_json(task_root / "result.json", result)
-            return result
+        base["dependency_graph_after"] = _dependency_graph_hash(package)
+        result = base | {
+            "classification": "dependency_materialization_failed",
+            "strict_pass": False,
+            "old_result": None,
+            "new_result": None,
+            "source_immutable": False,
+        }
+        write_json(task_root / "result.json", result)
+        return result
+    if materialization["status"] != "materialization_failed":
         effective_lock_hash = materialization["dependency_lock_sha256"]
         base["dependency_lock_hash"] = effective_lock_hash
         source_identity_fields["dependency_lock_hash"] = effective_lock_hash
         source_identity["identity"] = _hash_json(source_identity_fields)
+        base["source_hash_before"] = hash_package_tree(
+            package, include_lock=False
+        )
+        base["dependency_graph_before"] = _dependency_graph_hash(package)
+        base["dependency_graph_after"] = base["dependency_graph_before"]
 
-    source_before = hash_package_tree(checkout / task["package_subpath"], include_lock=True)
+    source_before = hash_package_tree(package, include_lock=False)
     if task["lane"] == "equivalence":
         lane_result = _equivalence_lane(
             task,
@@ -795,11 +878,29 @@ def _execute_task(
             "old_result": compiler_results["old"],
             "new_result": compiler_results["new"],
         }
-    source_after = hash_package_tree(checkout / task["package_subpath"], include_lock=True)
-    result["source_immutable"] = source_before == source_after
+    source_after = hash_package_tree(package, include_lock=False)
+    dependency_after = _dependency_graph_hash(package)
+    result["source_hash_before"] = source_before
+    result["source_hash_after"] = source_after
+    result["dependency_graph_before"] = base["dependency_graph_before"]
+    result["dependency_graph_after"] = dependency_after
+    compiler_inputs_unchanged = all(
+        _compiler_inputs_unchanged(
+            result.get(label),
+            expected_source_hash=source_before,
+            expected_dependency_graph=base["dependency_graph_before"],
+        )
+        for label in ("old_result", "new_result")
+    )
+    result["source_immutable"] = bool(
+        source_before == source_after
+        and result["dependency_graph_before"] == dependency_after
+        and compiler_inputs_unchanged
+    )
     if not result["source_immutable"]:
         result["classification"] = "source_mutated"
         result["strict_pass"] = False
+    result["final_classification"] = result["classification"]
     write_json(task_root / "result.json", result)
     return result
 

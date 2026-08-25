@@ -160,6 +160,7 @@ class ResultProtocolTamperTests(unittest.TestCase):
             "logical_obligation_id": "2" * 64,
             "semantic_model_id": "3" * 64,
             "checker_configuration_id": "4" * 64,
+            "checker_implementation_id": "9" * 64,
             "old_script_sha256": "5" * 64,
             "new_script_sha256": "6" * 64,
             "verified_abi_id": "7" * 64,
@@ -317,7 +318,7 @@ class CachePoisoningTests(unittest.TestCase):
             schema_tamper = copy.deepcopy(row)
             schema_tamper["cache_binding"][
                 "generated_source_schema_version"
-            ] = "equiv-generated-lean/v3"
+            ] = "equiv-generated-lean/v999"
             _seal_evidence_row(schema_tamper)
             self.assertFalse(
                 _cached_pair_matches(

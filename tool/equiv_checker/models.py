@@ -8,7 +8,9 @@ from .evidence import (
     attempt_id,
     checker_configuration_id,
     checker_configuration_payload,
+    execution_attempt_id,
     logical_obligation_id,
+    obligation_attempt_id,
     platform_identity,
     program_artifact_id,
     semantic_model_id,
@@ -383,6 +385,45 @@ class SemanticObligationRecord:
             solver_timeout=config.timeouts.z3,
             process_timeouts=asdict(config.timeouts),
             platform_identity_value=platform or platform_identity(),
+            attempt_sequence=attempt_sequence,
+        )
+
+    def execution_attempt_id(
+        self,
+        config: BlasterConfig,
+        *,
+        execution_plan: dict[str, Any],
+        generated_source_sha256: str | None,
+        execution_sequence: int,
+        platform: dict[str, Any] | None = None,
+    ) -> str:
+        checker = config.checker_configuration()
+        return execution_attempt_id(
+            execution_plan=execution_plan,
+            generated_source_sha256=generated_source_sha256,
+            checker_configuration_id_value=checker["checker_configuration_id"],
+            checker_implementation_id_value=checker["checker_implementation_id"],
+            process_timeouts=asdict(config.timeouts),
+            random_seed=config.random_seed,
+            platform_identity_value=platform or platform_identity(),
+            execution_sequence=execution_sequence,
+        )
+
+    def obligation_attempt_id(
+        self,
+        config: BlasterConfig,
+        *,
+        execution_attempt_id_value: str,
+        relevant_solver_options: dict[str, Any],
+        attempt_sequence: int,
+    ) -> str:
+        return obligation_attempt_id(
+            logical_obligation_id_value=self.logical_obligation_id,
+            checker_configuration_id_value=config.checker_configuration()[
+                "checker_configuration_id"
+            ],
+            execution_attempt_id_value=execution_attempt_id_value,
+            relevant_solver_options=relevant_solver_options,
             attempt_sequence=attempt_sequence,
         )
 

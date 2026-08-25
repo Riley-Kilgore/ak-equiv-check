@@ -10,6 +10,9 @@ from unittest.mock import patch
 from equiv_checker.config import Compiler, compiler_pair
 from equiv_checker.corpus import (
     _equivalence_lane,
+    _compiler_inputs_unchanged,
+    _dependency_graph_hash,
+    _direct_lane_classification,
     _expanded_targets,
     _materialize_dependency_lock,
     load_corpus_lock,
@@ -68,6 +71,106 @@ class CorpusRunnerTests(unittest.TestCase):
             self.assertTrue(report["strict_pass"])
             self.assertEqual(report["completed_count"], 1)
             self.assertEqual(report["results"][0]["status"], "completed")
+
+
+    def test_all_direct_lanes_have_terminal_policy_classifications(self) -> None:
+        success = {"exit_code": 0, "timed_out": False, "diagnostic_text": ""}
+        expected = {
+            "compile": "compile_passed",
+            "check": "check_passed",
+            "bench": "benchmark_passed",
+            "config": "configuration_passed",
+            "docs": "documentation_passed",
+        }
+        for lane, classification in expected.items():
+            with self.subTest(lane=lane):
+                actual, strict_pass = _direct_lane_classification(
+                    {"lane": lane}, success, success
+                )
+                self.assertEqual(actual, classification)
+                self.assertTrue(strict_pass)
+        negative = {
+            "exit_code": 1,
+            "timed_out": False,
+            "diagnostic_text": "expected failure",
+        }
+        actual, strict_pass = _direct_lane_classification(
+            {
+                "lane": "negative-diagnostic",
+                "expected_diagnostic": "expected failure",
+            },
+            negative,
+            negative,
+        )
+        self.assertEqual(actual, "expected_negative_diagnostic")
+        self.assertTrue(strict_pass)
+
+    def test_compiler_input_verification_rejects_source_and_lock_mutation(
+        self,
+    ) -> None:
+        expected_source = "a" * 64
+        expected_lock = "b" * 64
+        valid = {
+            "source_hash_before": expected_source,
+            "source_hash_after": expected_source,
+            "dependency_graph_before": expected_lock,
+            "dependency_graph_after": expected_lock,
+        }
+        self.assertTrue(
+            _compiler_inputs_unchanged(
+                valid,
+                expected_source_hash=expected_source,
+                expected_dependency_graph=expected_lock,
+            )
+        )
+        for field in ("source_hash_after", "dependency_graph_after"):
+            with self.subTest(field=field):
+                changed = dict(valid)
+                changed[field] = "c" * 64
+                self.assertFalse(
+                    _compiler_inputs_unchanged(
+                        changed,
+                        expected_source_hash=expected_source,
+                        expected_dependency_graph=expected_lock,
+                    )
+                )
+
+    def test_dependency_graph_identity_ignores_only_volatile_etag_time(
+        self,
+    ) -> None:
+        template = """\
+[[requirements]]
+name = "aiken-lang/stdlib"
+version = "main"
+source = "github"
+
+[[packages]]
+name = "aiken-lang/stdlib"
+version = "main"
+requirements = []
+source = "github"
+
+[etags]
+"aiken-lang/stdlib@main" = [{{ secs_since_epoch = 1, nanos_since_epoch = {nanos} }}, "{commit}"]
+"""
+        with tempfile.TemporaryDirectory() as temporary:
+            package = Path(temporary)
+            lock = package / "aiken.lock"
+            lock.write_text(
+                template.format(nanos=10, commit="a" * 64),
+                encoding="utf-8",
+            )
+            original = _dependency_graph_hash(package)
+            lock.write_text(
+                template.format(nanos=20, commit="a" * 64),
+                encoding="utf-8",
+            )
+            self.assertEqual(_dependency_graph_hash(package), original)
+            lock.write_text(
+                template.format(nanos=20, commit="b" * 64),
+                encoding="utf-8",
+            )
+            self.assertNotEqual(_dependency_graph_hash(package), original)
 
     def test_lock_rejects_duplicate_targets_and_invalid_diagnostic_lane(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -67,6 +67,23 @@ Dirty manifests are marked non-reproducible from the commit alone. Their `reprod
 
 The `local-candidate` profile requires a clean committed release or local artifact as its base and a `build-local` artifact as its candidate. Dirty candidate evidence is allowed; a dirty base is rejected so the reference point remains reproducible.
 
+For an optimization branch, build both manifests from explicit source checkouts so
+the evidence records the exact base and candidate trees:
+
+```bash
+uv run equiv-checker compiler build-local \
+  --aiken-source /path/to/clean/aiken-v1.1.23 \
+  --label base \
+  --output ../.ak-equiv/compilers/base
+uv run equiv-checker compiler build-local \
+  --aiken-source /path/to/aiken-optimization-branch \
+  --label candidate \
+  --output ../.ak-equiv/compilers/candidate
+```
+
+Use `--allow-dirty` only for development evidence. Commit the candidate source
+and rebuild before evaluating release publishability.
+
 Compare a released base with a local candidate:
 
 ```bash
@@ -129,8 +146,8 @@ uv run equiv-checker corpus run ../corpus/aiken_mandatory_corpus.lock.json \
   --resume
 ```
 
-Gate a clean or dirty local compiler candidate through release provenance,
-the complete sentinel, and every mandatory corpus task:
+Gate a local compiler candidate through release provenance, the complete
+sentinel, and every mandatory corpus task:
 
 ```bash
 uv run equiv-checker candidate gate \
@@ -143,10 +160,27 @@ uv run equiv-checker candidate gate \
   --policy strict
 ```
 
-Dirty candidates still run semantic checks, but the release decision is
-fail-closed and labels their evidence `development_only`.
+Screen the same policy-neutral evidence without recompiling or repeating solver
+work by changing only `--policy screening`. The evidence run ID and the strict
+and screening decision IDs remain unchanged; only the selected-decision ID
+changes. Screening may accept `bounded_equivalent`, but preserves that semantic
+state, cannot alter the strict decision, and is never publishable.
 
-Normal package comparisons support `--resume` and `--force`. Corpus runs additionally support repeatable `--only SOURCE_OR_TARGET`, cached `--only-pair PAIR_ID`, and deterministic `--shard-index N --shard-count M`.
+Verify the emitted bundle independently:
+
+```bash
+uv run equiv-checker candidate verify work/candidate-gates/<evidence-run-id>
+```
+
+Dirty or uncommitted candidates still complete semantic work, but their evidence
+is labeled `development_only` and cannot be published. A publishable result
+requires a strict pass, clean committed candidate source, verified source and
+dependency inputs, a self-verified bundle, and a signed trusted-main CI archive.
+
+Normal package comparisons support `--resume` and `--force`. Corpus runs
+additionally support repeatable `--only SOURCE_OR_TARGET`, cached
+`--only-pair PAIR_ID`, and deterministic
+`--shard-index N --shard-count M`.
 
 Capture a compact, relocatable baseline after both runs:
 
@@ -213,7 +247,7 @@ Missing locks or evidence, bounded results, unsupported models or purposes, non-
 ## Evidence identities
 
 All evidence IDs are SHA-256 hashes of canonical JSON envelopes carrying
-`identity_schema_version = equiv-evidence-identity/v2` and an identity kind.
+`identity_schema_version = equiv-evidence-identity/v3` and an identity kind.
 The payloads are deliberately separate:
 
 - A program artifact binds the serialized-script SHA-256, Plutus version, and
@@ -228,35 +262,53 @@ The payloads are deliberately separate:
   ledger predicate.
 - A logical obligation binds the program-pair ID, semantic-model ID, and one
   explicit obligation kind.
-- A checker configuration binds the generated-Lean schema, Lean and Z3
-  versions, pinned Blaster/importer/preparer revisions, solver binary, and
-  relevant solver configuration.
-- An attempt binds the logical obligation and checker configuration to the
-  random seed, solver and process timeouts, platform identity, and attempt
-  sequence.
+- A checker implementation ID hashes the complete deterministic checker source
+  tree: Python checker modules, JSON schemas, Rust shim sources and locks,
+  checked-in Lean adapters and templates, Blaster toolchain metadata, and tool
+  configuration and lock files. Generated data, caches, logs, work directories,
+  and build outputs are excluded.
+- A checker configuration binds that implementation ID, the generated-Lean,
+  result, and witness protocol versions, Lean and Z3 versions, pinned
+  Blaster/importer/preparer revisions, solver binary, and relevant solver
+  configuration.
+- An execution attempt represents one generated Lean process. It binds the
+  complete execution plan, generated-source hash, checker configuration,
+  process and solver timeouts, random seed, platform, and execution sequence.
+- An obligation attempt binds exactly one logical obligation and checker
+  configuration to its execution attempt, relevant solver options, and
+  obligation attempt sequence. Several obligation attempts may share one
+  execution attempt; one obligation attempt ID may never identify different
+  logical obligations.
 
-Strict and screening policies decide over evidence; they are not logical
-obligation identities. Cache reuse requires the logical obligation, checker
-configuration, program hashes, verified ABI, semantic model, and generated
-source schema to match. Reuse records the original and new attempts plus the
-validated artifact checksum.
+The evidence run ID binds compiler artifacts, all source and dependency inputs,
+the feature contract, corpus lock, scope, checker implementation and
+configuration, semantic models, and runtime bounds. Strict, screening, selected
+policy, and CLI exit preference are excluded. Strict and screening decision IDs
+separately bind the evidence run ID and their policy schema and configuration.
+
+Global cache reuse requires the exact logical obligation, checker configuration
+and implementation, generated-source schema, scripts, verified ABI, semantic
+model, generated Lean checksum, and sealed artifact checksums. Each entry is
+staged and atomically renamed under an exclusive per-obligation lock. Partial,
+malformed, symlinked, or corrupt entries are quarantined before recomputation.
 
 ## Result, witness, and replay protocols
 
-Every solver verdict uses one strict-schema `EQUIV_RESULT_V2` JSON marker. It
-binds the program pair, logical obligation, semantic model, checker
-configuration, both script hashes, verified ABI, obligation kind, theorem
-statement, generated-source schema, and solver status. Missing, duplicate,
-malformed, unknown, mismatched, or exit-code-conflicting markers are rejected.
+Every solver verdict uses one strict-schema `EQUIV_RESULT_V3` JSON marker. It
+binds the checker implementation and configuration, program pair, exact logical
+obligation, semantic model, both script hashes, verified ABI, obligation kind,
+theorem statement, generated-source schema, and solver status. Missing,
+duplicate, malformed, unknown, mismatched, or exit-code-conflicting markers are
+rejected.
 
-`EQUIV_WITNESS_V2` is the native machine-witness protocol. It binds the same
-pair, obligation, theorem, and model to ordered names, types, structured
-values, serialized UPLC terms, domain evidence, and a witness checksum.
-Unsupported values, lossy serialization, wrong order or arity, domain
-violations, duplicate markers, and conflicting witnesses are rejected. The
-pinned upstream fallback is explicitly labeled
-`witness_source = legacy_human_parser`; every fallback value is reserialized
-and concretely replayed before it can confirm a difference.
+`EQUIV_WITNESS_V3` binds a witness to its producing logical obligation,
+obligation attempt, and execution attempt, as well as the pair, theorem, model,
+ordered names and types, structured values, serialized UPLC terms, domain
+evidence, and witness checksum. Results that did not produce a witness carry a
+null witness reference. The pinned upstream fallback remains explicitly labeled
+`witness_source = legacy_human_parser`; normalized fallback output is not
+described as a native witness and must be concretely replayed before it can
+confirm a semantic difference.
 
 Replay records configured, effective, evaluator-enforced, externally enforced,
 and unenforced limits separately. The separately pinned Aiken evaluator is a
@@ -283,52 +335,67 @@ equivalence
 negative-diagnostic
 ```
 
-Compile-only, benchmark, configuration, and documentation targets do not require validators. Every task records old/new results, expected outcome, classification, logs, hashes, timeout, source immutability, and strict policy.
+Compile-only, benchmark, configuration, and documentation targets do not require validators. Every task records old/new results, expected outcome, final classification, logs, hashes, timeout, and source/dependency immutability. Release policy is derived later from those policy-neutral records.
 
 ## Evidence identity, reuse, and bundles
 
-Program artifacts are identified by serialized bytes, Plutus version, and
-serialization format. Program pairs add the ordered old/new artifact IDs and
-verified ABI ID. Semantic models bind variable types, argument order, arity,
-domain and assumptions, observation, semantic runtime bound, and any
-purpose-specific ledger predicate. Logical obligations combine a program pair,
-semantic model, and explicit obligation kind. Checker configurations bind the
-Lean, Blaster, importer, preparer, ledger-model, and Z3 revisions and solver
-configuration. Attempts additionally bind seed, process and solver timeouts,
-platform, and attempt sequence. Policy is a decision over this evidence, not
-part of its logical identity.
+Candidate execution has five ordered phases: build and discovery for every
+selected task, one global content-addressed obligation plan, exact cache lookup,
+execution of each remaining unique obligation, then consumer linking and policy
+decisions. Blaster is not invoked during discovery. Shared results link back to
+every handler, feature, task, and source that consumes them.
 
-Absolute paths, host names, timestamps, temporary directories, handler titles,
-and strict policy do not affect semantic identity. `--resume` accepts cached
-evidence only when the obligation, checker, script hashes, ABI, model,
-generated-source schema, generated Lean checksum, and sealed artifact checksum
-all validate. `--force` preserves the previous bundle under
-`work/attempts/<run-id>/<sequence>/`.
+Final bundles contain no pending obligations. Unsupported ledger profiles are
+represented by explicit `ledger_model_unsupported` omission records. Optional
+ledger omissions do not override or block complete raw equivalence; missing or
+unsupported required raw evidence always blocks strict mode.
 
-Comparison bundles contain separate validator, handler-pair, program-pair,
-semantic-obligation, obligation-result, validator-link, and feature-link
-records. Multiple blueprint handlers may link to one raw UPLC obligation;
-purpose-specific ledger domains remain distinct.
-
-Candidate gates emit:
+Candidate bundles contain:
 
 ```text
-release-decision.json
-release-decision.md
+candidate-manifest.json
+global-plan.json
+global-program-pairs.json
+global-semantic-obligations.json
+program-artifacts.json
 program-pairs.json
+semantic-models.json
+semantic-model-omissions.json
 semantic-obligations.json
 obligation-results.json
+execution-attempts.json
+witnesses.json
+replays.json
 validator-links.json
 feature-links.json
 task-results.json
+source-results.json
 evidence-lineage.json
+pair-classifications.json
+strict-decision.json
+screening-decision.json
+selected-decision.json
 environment.json
+feature-contract.json
+corpus-lock.json
+compiler-release-lock.json
+ci-attestation.json
 checksums.json
 ```
 
-Schema-version-2 historical baselines live under `results/baselines/`.
-Validate their complete checksums, parent lineage, clean source provenance,
-content identity, and public CI attestation with:
+`candidate verify` recomputes input hashes, content identities, compiler and ABI
+identities, semantic and attempt identities, witness and replay parentage,
+cache-reuse lineage, all consumer links, classifications, decisions, checksums,
+and count invariants. Archive verification additionally requires GitHub
+Sigstore provenance from `.github/workflows/ci.yml` on `refs/heads/main`.
+
+Schema-version-3 historical baselines are published under `results/baselines/`
+only by the trusted `baseline-v3-publication` job after both real profiles
+succeed. Until that publication commit lands, checked-in schema-version-2
+baselines remain explicit legacy data and the read-only jobs skip, rather than
+reinterpret, them. Version 3 validation covers complete checksums, attempt and
+witness lineage, clean source provenance, content identity, and public CI
+attestation:
 
 ```bash
 uv run equiv-checker baseline verify \
@@ -354,8 +421,10 @@ and dirty compiler provenance, and fail-closed classifications.
 
 CI is split by cost and trust boundary. Pull requests run unit, schema,
 identity, protocol-tamper, cache-poisoning, deduplication, report-invariant,
-baseline-attestation, and fake-tool tests. Scheduled and main-branch jobs
-separately run the released positive and negative profiles, a real changed-
-output local v1.1.22 candidate against the v1.1.21 base, and a current
-same-source local smoke. All actions are full-SHA pinned and evidence jobs
-upload complete bundles.
+baseline-attestation, and fake-tool tests. Main-branch pushes also run the real
+changed-output candidate path. Scheduled, manual, and main-branch runs execute
+the complete strict candidate gate across the sentinel and all mandatory tasks,
+self-verify the bundle, sign the archive with GitHub artifact provenance, and
+upload the gate, bundle, manifests, and release verification. Only the separate
+baseline-publication job receives `contents: write`; all actions are full-SHA
+pinned.

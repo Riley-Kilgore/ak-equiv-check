@@ -42,7 +42,7 @@ def _identity(kind: str, payload: Any) -> str:
     return hashlib.sha256(
         _canonical(
             {
-                "identity_schema_version": "equiv-evidence-identity/v2",
+                "identity_schema_version": "equiv-evidence-identity/v3",
                 "identity_kind": kind,
                 "value": payload,
             }
@@ -325,7 +325,7 @@ def _ci_attestation(
     if not isinstance(head_sha, str) or len(head_sha) != 40:
         raise ValueError("CI repository commit is invalid")
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "attestation_kind": "public_ci_reproduction",
         "profile_id": profile_id,
         "baseline_content_id": content_id,
@@ -374,19 +374,48 @@ def capture(
             child.unlink()
     output.mkdir(parents=True, exist_ok=True)
     pair_results = _records(run, "pair-results.json")
+    program_pairs = _records(run, "program-pairs.json")
+    program_artifacts: dict[str, dict[str, Any]] = {}
+    for pair in program_pairs:
+        for side in ("old_program_artifact", "new_program_artifact"):
+            artifact = pair[side]
+            serialized_hex = (
+                (run / artifact["path"])
+                .read_text(encoding="ascii")
+                .strip()
+                .lower()
+            )
+            record = {
+                "program_artifact_id": artifact["program_artifact_id"],
+                "serialized_script_bytes_hex": serialized_hex,
+                "script_sha256": artifact["script_sha256"],
+                "script_size": artifact["script_size"],
+                "plutus_version": artifact["plutus_version"],
+                "serialization_format": artifact["serialization_format"],
+            }
+            previous = program_artifacts.setdefault(
+                artifact["program_artifact_id"], record
+            )
+            if previous != record:
+                raise ValueError("conflicting historical program artifact")
     record_files = {
         "handler-pairs.ndjson": _records(run, "handler-pairs.json"),
-        "program-pairs.ndjson": _records(run, "program-pairs.json"),
+        "program-artifacts.ndjson": [
+            program_artifacts[key] for key in sorted(program_artifacts)
+        ],
+        "program-pairs.ndjson": program_pairs,
         "semantic-obligations.ndjson": _records(
             run, "semantic-obligations.json"
         ),
         "obligation-results.ndjson": _records(run, "obligation-results.json"),
+        "execution-attempts.ndjson": _records(
+            run, "execution-attempts.json"
+        ),
+        "witnesses.ndjson": _records(run, "witnesses.json"),
+        "replays.ndjson": _records(run, "replays.json"),
         "validator-links.ndjson": _records(run, "validator-links.json"),
         "feature-links.ndjson": _records(run, "feature-links.json"),
     }
-    _bind_replay_evidence(
-        record_files["obligation-results.ndjson"], pair_results
-    )
     _bind_historical_feature_links(profile, record_files, pair_results)
     obligation_results = record_files["obligation-results.ndjson"]
     record_files["evidence-lineage.ndjson"] = [
@@ -394,10 +423,13 @@ def capture(
             "evidence_result_id": row["evidence_result_id"],
             "logical_obligation_id": row["logical_obligation_id"],
             "program_pair_id": row["program_pair_id"],
-            "attempt_id": row["attempt_id"],
+            "obligation_attempt_id": row["obligation_attempt_id"],
+            "execution_attempt_id": row["execution_attempt_id"],
+            "checker_configuration_id": row["checker_configuration_id"],
+            "checker_implementation_id": row["checker_implementation_id"],
+            "witness_reference": row.get("witness_reference"),
+            "replay_reference": row.get("replay_reference"),
             "reused": row.get("reused", False),
-            "evidence_reuse": row.get("evidence_reuse"),
-            "artifact_checksum": row.get("artifact_checksum"),
         }
         for row in obligation_results
     ]
@@ -411,7 +443,7 @@ def capture(
         )
         manifests[label] = _manifest_record(manifest_path)
     compiler_lock = {
-        "schema_version": 2,
+        "schema_version": 3,
         "profile_lock": _read(PROFILE_LOCK)["profiles"][profile["id"]],
         "compilers": manifests,
     }
@@ -420,7 +452,7 @@ def capture(
         for label in ("old", "new")
     }
     source_lock = {
-        "schema_version": 2,
+        "schema_version": 3,
         "fixture": profile["fixture"],
         "package": run_record["package"],
         "source_hash": run_record["source_hash"],
@@ -435,9 +467,12 @@ def capture(
         == builds["new"]["dependency_lock_hash_before"],
     }
     environment = {
-        "schema_version": 2,
+        "schema_version": 3,
         "blaster_configuration": run_record["blaster_configuration"],
         "checker_configuration": run_record["checker_configuration"],
+        "checker_implementation_id": run_record["blaster_configuration"][
+            "checker_implementation_id"
+        ],
         "replay_trust": [
             row.get("counterexample_replay", {}).get("replay_trust")
             for row in pair_results
@@ -449,10 +484,18 @@ def capture(
         {
             "handler_pair_records": len(record_files["handler-pairs.ndjson"]),
             "program_pair_records": len(record_files["program-pairs.ndjson"]),
+            "program_artifact_records": len(
+                record_files["program-artifacts.ndjson"]
+            ),
             "semantic_obligation_records": len(
                 record_files["semantic-obligations.ndjson"]
             ),
             "obligation_result_records": len(obligation_results),
+            "execution_attempt_records": len(
+                record_files["execution-attempts.ndjson"]
+            ),
+            "witness_records": len(record_files["witnesses.ndjson"]),
+            "replay_records": len(record_files["replays.ndjson"]),
             "validator_link_records": len(record_files["validator-links.ndjson"]),
             "feature_link_records": len(record_files["feature-links.ndjson"]),
             "validator_handlers": len(record_files["validator-links.ndjson"]),
@@ -460,7 +503,7 @@ def capture(
         }
     )
     compact_summary = {
-        "schema_version": 2,
+        "schema_version": 3,
         "profile": {
             key: profile_result[key]
             for key in (
@@ -476,6 +519,9 @@ def capture(
             )
         },
         "run_id": run_record["run_id"],
+        "checker_implementation_id": run_record["blaster_configuration"][
+            "checker_implementation_id"
+        ],
         "counts": counts,
         "count_invariants": summary["count_invariants"],
         "status_counts": summary["status_counts"],
@@ -522,7 +568,7 @@ def capture(
     content_id = _identity(
         "baseline-content",
         {
-            "schema_version": 2,
+            "schema_version": 3,
             "algorithm": "sha256",
             "files": checksums,
         },
@@ -530,7 +576,7 @@ def capture(
     _write(
         output / "checksums.json",
         {
-            "schema_version": 2,
+            "schema_version": 3,
             "algorithm": "sha256",
             "baseline_content_id": content_id,
             "files": checksums,
@@ -562,8 +608,8 @@ def attach_attestation(
     profile = _profile(identifier)
     checksums = _read(baseline / "checksums.json")
     summary = _read(baseline / "summary.json")
-    if checksums.get("schema_version") != 2:
-        raise ValueError("baseline checksums must use schema_version 2")
+    if checksums.get("schema_version") != 3:
+        raise ValueError("baseline checksums must use schema_version 3")
     content_id = checksums.get("baseline_content_id")
     run_id = summary.get("run_id")
     if not isinstance(content_id, str) or not isinstance(run_id, str):
@@ -585,7 +631,7 @@ def attach_attestation(
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="capture or attest a compact schema-version-2 historical baseline"
+        description="capture or attest a compact schema-version-3 historical baseline"
     )
     parser.add_argument("--profile", required=True)
     parser.add_argument("--run", type=Path)

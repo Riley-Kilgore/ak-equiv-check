@@ -5,15 +5,35 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .evidence import canonical_json, identity_hash
+from .evidence import (
+    WITNESS_FIELDS,
+    canonical_json,
+    candidate_witness_id,
+    checker_configuration_id,
+    execution_attempt_id_from_record,
+    identity_hash,
+    logical_obligation_id,
+    obligation_attempt_id_from_record,
+    obligation_result_id,
+    program_artifact_id,
+    program_pair_id,
+    replay_id,
+    semantic_model_id,
+    validate_witness_record,
+    verified_abi_id,
+)
 
 
 REQUIRED_BASELINE_FILES = frozenset(
     {
         "handler-pairs.ndjson",
+        "program-artifacts.ndjson",
         "program-pairs.ndjson",
         "semantic-obligations.ndjson",
         "obligation-results.ndjson",
+        "execution-attempts.ndjson",
+        "witnesses.ndjson",
+        "replays.ndjson",
         "evidence-lineage.ndjson",
         "validator-links.ndjson",
         "feature-links.ndjson",
@@ -65,7 +85,7 @@ def baseline_content_id(checksums: dict[str, str]) -> str:
     return identity_hash(
         "baseline-content",
         {
-            "schema_version": 2,
+            "schema_version": 3,
             "algorithm": "sha256",
             "files": checksums,
         },
@@ -95,8 +115,10 @@ def verify_baseline(path: Path) -> dict[str, Any]:
     if missing:
         raise ValueError("baseline files missing: " + ", ".join(missing))
     checksums_record = _read_json(root / "checksums.json")
-    if checksums_record.get("schema_version") != 2:
-        raise ValueError("baseline checksums must use schema_version 2")
+    if checksums_record.get("schema_version") == 2:
+        raise ValueError("legacy baseline schema_version 2 must be regenerated")
+    if checksums_record.get("schema_version") != 3:
+        raise ValueError("baseline checksums must use schema_version 3")
     if checksums_record.get("algorithm") != "sha256":
         raise ValueError("unsupported baseline checksum algorithm")
     checksums = checksums_record.get("files")
@@ -122,19 +144,189 @@ def verify_baseline(path: Path) -> dict[str, Any]:
         raise ValueError("baseline content identity mismatch")
 
     summary = _read_json(root / "summary.json")
-    if summary.get("schema_version") != 2:
-        raise ValueError("baseline summary must use schema_version 2")
+    if summary.get("schema_version") != 3:
+        raise ValueError("baseline summary must use schema_version 3")
     if summary.get("source_provenance", {}).get("dirty") is not False:
         raise ValueError("canonical baseline source provenance is dirty")
+    compiler_lock = _read_json(root / "compiler-lock.json")
+    source_lock = _read_json(root / "source-lock.json")
+    if (
+        compiler_lock.get("schema_version") != 3
+        or source_lock.get("schema_version") != 3
+    ):
+        raise ValueError("baseline input locks must use schema_version 3")
+    compilers = compiler_lock.get("compilers")
+    if not isinstance(compilers, dict) or set(compilers) != {"old", "new"}:
+        raise ValueError("baseline compiler lock is incomplete")
+    for label, manifest in compilers.items():
+        if not isinstance(manifest, dict):
+            raise ValueError(f"baseline {label} compiler manifest is invalid")
+        source = manifest.get("source")
+        binary = manifest.get("binary")
+        if (
+            not isinstance(source, dict)
+            or source.get("dirty") is not False
+            or not isinstance(binary, dict)
+        ):
+            raise ValueError(f"baseline {label} compiler provenance is invalid")
+        artifact_identity = {
+            "artifact_kind": manifest.get("artifact_kind"),
+            "source_tree_sha256": source.get("source_tree_sha256"),
+            "commit_sha": source.get("commit_sha"),
+            "binary_sha256": binary.get("sha256"),
+            "target": manifest.get("target"),
+            "build_command": manifest.get("build", {}).get("command"),
+        }
+        expected_compiler_id = hashlib.sha256(
+            canonical_json(artifact_identity).encode("utf-8")
+        ).hexdigest()
+        if manifest.get("artifact_id") != expected_compiler_id:
+            raise ValueError(f"baseline {label} compiler identity mismatch")
+    for field in ("source_hash", "dependency_lock_hash"):
+        value = source_lock.get(field)
+        if (
+            not isinstance(value, str)
+            or len(value) != 64
+            or any(character not in "0123456789abcdef" for character in value)
+        ):
+            raise ValueError(f"baseline {field} is invalid")
+    if (
+        source_lock.get("source_immutable") is not True
+        or source_lock.get("old_new_source_hash_equal") is not True
+        or source_lock.get("old_new_dependency_lock_equal") is not True
+    ):
+        raise ValueError("baseline source or dependency inputs are not immutable")
 
     handler_pairs = _read_ndjson(root / "handler-pairs.ndjson")
+    program_artifacts = _read_ndjson(root / "program-artifacts.ndjson")
     program_pairs = _read_ndjson(root / "program-pairs.ndjson")
     obligations = _read_ndjson(root / "semantic-obligations.ndjson")
     results = _read_ndjson(root / "obligation-results.ndjson")
+    executions = _read_ndjson(root / "execution-attempts.ndjson")
+    witnesses = _read_ndjson(root / "witnesses.ndjson")
+    replays = _read_ndjson(root / "replays.ndjson")
     lineage = _read_ndjson(root / "evidence-lineage.ndjson")
     validator_links = _read_ndjson(root / "validator-links.ndjson")
     feature_links = _read_ndjson(root / "feature-links.ndjson")
     task_results = _read_ndjson(root / "task-results.ndjson")
+    environment = _read_json(root / "environment.json")
+    if environment.get("schema_version") != 3:
+        raise ValueError("baseline environment must use schema_version 3")
+    blaster_configuration = environment.get("blaster_configuration")
+    if not isinstance(blaster_configuration, dict):
+        raise ValueError("baseline Blaster configuration is missing")
+    configuration_payload = dict(blaster_configuration)
+    configured_id = configuration_payload.pop(
+        "checker_configuration_id", None
+    )
+    for diagnostic_field in (
+        "semantic_runtime_step_bound",
+        "fuel_semantics",
+        "timeouts",
+        "random_seed",
+        "evaluator",
+        "secondary_evaluator",
+    ):
+        configuration_payload.pop(diagnostic_field, None)
+    if checker_configuration_id(configuration_payload) != configured_id:
+        raise ValueError("baseline checker configuration identity mismatch")
+    checker_implementation = blaster_configuration.get(
+        "checker_implementation_id"
+    )
+    if (
+        environment.get("checker_implementation_id")
+        != checker_implementation
+        or summary.get("checker_implementation_id")
+        != checker_implementation
+    ):
+        raise ValueError("baseline checker implementation identity mismatch")
+
+    artifact_ids: set[str] = set()
+    for artifact in program_artifacts:
+        try:
+            serialized = bytes.fromhex(
+                str(artifact["serialized_script_bytes_hex"])
+            )
+        except ValueError as error:
+            raise ValueError(
+                "baseline program artifact has invalid bytes"
+            ) from error
+        expected_artifact = program_artifact_id(
+            serialized,
+            str(artifact["plutus_version"]),
+            str(artifact["serialization_format"]),
+        )
+        if (
+            artifact.get("program_artifact_id") != expected_artifact
+            or hashlib.sha256(serialized).hexdigest()
+            != artifact.get("script_sha256")
+            or len(serialized) != artifact.get("script_size")
+            or expected_artifact in artifact_ids
+        ):
+            raise ValueError("baseline program artifact identity mismatch")
+        artifact_ids.add(expected_artifact)
+    for pair in program_pairs:
+        old_id = pair["old_program_artifact"]["program_artifact_id"]
+        new_id = pair["new_program_artifact"]["program_artifact_id"]
+        if old_id not in artifact_ids or new_id not in artifact_ids:
+            raise ValueError("baseline program pair has an unknown artifact")
+        abi_id = verified_abi_id(pair["verified_abi"])
+        if (
+            pair.get("verified_abi_id") != abi_id
+            or pair.get("program_pair_id")
+            != program_pair_id(old_id, new_id, abi_id)
+        ):
+            raise ValueError("baseline program pair identity mismatch")
+    for obligation in obligations:
+        model_id = semantic_model_id(
+            obligation["input_model"],
+            int(obligation["semantic_runtime_bound"]),
+        )
+        if (
+            obligation.get("semantic_model_id") != model_id
+            or obligation.get("logical_obligation_id")
+            != logical_obligation_id(
+                obligation["program_pair_id"],
+                model_id,
+                obligation["obligation_kind"],
+            )
+        ):
+            raise ValueError("baseline logical obligation identity mismatch")
+
+    execution_by_id: dict[str, dict[str, Any]] = {}
+    for execution in executions:
+        execution_id = execution_attempt_id_from_record(execution)
+        if (
+            execution.get("execution_attempt_id") != execution_id
+            or execution.get("checker_configuration_id") != configured_id
+            or execution.get("checker_implementation_id")
+            != checker_implementation
+            or execution_id in execution_by_id
+        ):
+            raise ValueError("baseline execution attempt identity mismatch")
+        execution_by_id[execution_id] = execution
+    witness_by_id: dict[str, dict[str, Any]] = {}
+    for witness in witnesses:
+        witness_id_value = str(witness.get("witness_id"))
+        protocol_witness = {
+            key: witness[key] for key in WITNESS_FIELDS if key in witness
+        }
+        validate_witness_record(protocol_witness, {})
+        if (
+            candidate_witness_id(witness) != witness_id_value
+            or witness_id_value in witness_by_id
+        ):
+            raise ValueError("baseline witness identity mismatch")
+        witness_by_id[witness_id_value] = witness
+    replay_by_id: dict[str, dict[str, Any]] = {}
+    for replay in replays:
+        replay_id_value = str(replay.get("replay_id"))
+        if (
+            replay_id(replay) != replay_id_value
+            or replay_id_value in replay_by_id
+        ):
+            raise ValueError("baseline replay identity mismatch")
+        replay_by_id[replay_id_value] = replay
     pair_ids = {
         row.get("program_pair_id")
         for row in program_pairs
@@ -165,6 +357,10 @@ def verify_baseline(path: Path) -> dict[str, Any]:
     evidence_ids: set[str] = set()
     result_obligation_ids: set[str] = set()
     evidence_by_obligation: dict[str, str] = {}
+    attempt_parent: dict[str, str] = {}
+    obligation_by_id = {
+        row["logical_obligation_id"]: row for row in obligations
+    }
     for row in results:
         obligation_id = row.get("logical_obligation_id")
         if (
@@ -175,6 +371,55 @@ def verify_baseline(path: Path) -> dict[str, Any]:
                 "duplicate or orphaned obligation result"
             )
         result_obligation_ids.add(obligation_id)
+        if row.get("status") == "pending":
+            raise ValueError("baseline contains a pending obligation")
+        execution_id = row.get("execution_attempt_id")
+        if execution_id not in execution_by_id:
+            raise ValueError("baseline obligation has a wrong execution parent")
+        if obligation_attempt_id_from_record(row) != row.get(
+            "obligation_attempt_id"
+        ):
+            raise ValueError("baseline obligation attempt identity mismatch")
+        attempt_id_value = str(row["obligation_attempt_id"])
+        previous_attempt_parent = attempt_parent.setdefault(
+            attempt_id_value, str(obligation_id)
+        )
+        if previous_attempt_parent != obligation_id:
+            raise ValueError(
+                "one obligation attempt ID is used by different logical obligations"
+            )
+        if obligation_result_id(row) != row.get("evidence_result_id"):
+            raise ValueError("baseline obligation result identity mismatch")
+        witness_reference = row.get("witness_reference")
+        if witness_reference is not None:
+            witness = witness_by_id.get(str(witness_reference))
+            if (
+                witness is None
+                or witness.get("producing_logical_obligation_id")
+                != obligation_id
+                or witness.get("producing_obligation_attempt_id")
+                != attempt_id_value
+                or witness.get("producing_execution_attempt_id")
+                != execution_id
+            ):
+                raise ValueError("baseline witness has wrong parents")
+        replay_reference = row.get("replay_reference")
+        if replay_reference is not None:
+            replay = replay_by_id.get(str(replay_reference))
+            if (
+                replay is None
+                or replay.get("logical_obligation_id") != obligation_id
+                or replay.get("obligation_attempt_id") != attempt_id_value
+                or replay.get("execution_attempt_id") != execution_id
+                or replay.get("witness_id") != witness_reference
+                or replay.get("confirmed") is not True
+                or obligation_by_id[str(obligation_id)]["obligation_kind"]
+                not in {
+                    "observational_equivalence",
+                    "ledger_observational_equivalence",
+                }
+            ):
+                raise ValueError("baseline replay has wrong parents")
         evidence_id = row.get("evidence_result_id")
         if not isinstance(evidence_id, str) or evidence_id in evidence_ids:
             raise ValueError("duplicate or missing evidence-result identity")
@@ -187,6 +432,20 @@ def verify_baseline(path: Path) -> dict[str, Any]:
         evidence_id = row.get("evidence_result_id")
         if evidence_id not in evidence_ids or evidence_id in lineage_evidence_ids:
             raise ValueError("duplicate or orphaned evidence lineage")
+        result = next(
+            item
+            for item in results
+            if item["evidence_result_id"] == evidence_id
+        )
+        if (
+            row.get("logical_obligation_id")
+            != result["logical_obligation_id"]
+            or row.get("obligation_attempt_id")
+            != result["obligation_attempt_id"]
+            or row.get("execution_attempt_id")
+            != result["execution_attempt_id"]
+        ):
+            raise ValueError("baseline evidence lineage has wrong parents")
         lineage_evidence_ids.add(evidence_id)
     if lineage_evidence_ids != evidence_ids:
         raise ValueError("evidence lineage is incomplete")
@@ -224,8 +483,8 @@ def verify_baseline(path: Path) -> dict[str, Any]:
         validator_handler_ids.add(handler_id)
         validator_links_by_handler[handler_id] = row
         handler = handlers_by_id[handler_id]
-        program_pair_id = row.get("program_pair_id")
-        if program_pair_id != handler.get("program_pair_id"):
+        linked_program_pair_id = row.get("program_pair_id")
+        if linked_program_pair_id != handler.get("program_pair_id"):
             raise ValueError("validator link has the wrong program pair")
         linked_obligations = _linked_id_set(
             row,
@@ -238,7 +497,7 @@ def verify_baseline(path: Path) -> dict[str, Any]:
         )
         if (
             any(
-                obligation_parent[obligation_id] != program_pair_id
+                obligation_parent[obligation_id] != linked_program_pair_id
                 for obligation_id in linked_obligations
             )
             or linked_evidence
@@ -341,9 +600,13 @@ def verify_baseline(path: Path) -> dict[str, Any]:
         "handler_pair_records": len(handler_pairs),
         "unique_program_pairs": len(program_pairs),
         "program_pair_records": len(program_pairs),
+        "program_artifact_records": len(program_artifacts),
         "program_state_total": len(program_pairs),
         "semantic_obligation_records": len(obligations),
         "obligation_result_records": len(results),
+        "execution_attempt_records": len(executions),
+        "witness_records": len(witnesses),
+        "replay_records": len(replays),
         "obligation_state_total": len(obligations),
         "validator_handlers": len(validator_links),
         "validator_link_records": len(validator_links),
@@ -388,8 +651,8 @@ def verify_baseline(path: Path) -> dict[str, Any]:
         raise ValueError("CI attestation has unknown fields")
     if not required_attestation.issubset(attestation):
         raise ValueError("CI attestation is incomplete")
-    if attestation.get("schema_version") != 2:
-        raise ValueError("CI attestation must use schema_version 2")
+    if attestation.get("schema_version") != 3:
+        raise ValueError("CI attestation must use schema_version 3")
     if attestation.get("attestation_kind") != "public_ci_reproduction":
         raise ValueError("baseline is not attested by public CI")
     if attestation.get("verification_result") != "verified":
@@ -424,20 +687,24 @@ def verify_baseline(path: Path) -> dict[str, Any]:
             raise ValueError(f"CI attestation {field} is invalid")
 
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "valid": True,
         "baseline_content_id": content_id,
         "profile_id": summary.get("profile", {}).get("profile_id"),
         "counts": {
             "handler_pairs": len(handler_pairs),
             "program_pairs": len(program_pairs),
+            "program_artifacts": len(program_artifacts),
             "semantic_obligations": len(obligations),
             "obligation_results": len(results),
+            "execution_attempts": len(executions),
+            "witnesses": len(witnesses),
+            "replays": len(replays),
             "lineage_records": len(lineage),
             "validator_links": len(validator_links),
             "feature_links": len(feature_links),
             "task_results": len(task_results),
-            "replayed_results": sum("replay" in row for row in results),
+            "replayed_results": len(replays),
         },
         "ci_attestation": attestation,
     }
