@@ -516,7 +516,7 @@ jobs:
         run: |
           uv sync --directory tool --locked
           python3 scripts/setup_toolchains.py
-          lake -d tool/blaster-backend build CardanoLedgerApi
+          (cd tool/blaster-backend && lake build CardanoLedgerApi)
       - name: Materialize clean Aiken v1.1.23 source
         run: |
           git clone --filter=blob:none https://github.com/aiken-lang/aiken.git "$RUNNER_TEMP/aiken"
