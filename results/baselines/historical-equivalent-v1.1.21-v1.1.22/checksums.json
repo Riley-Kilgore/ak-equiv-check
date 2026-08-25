@@ -1,20 +1,24 @@
 {
   "algorithm": "sha256",
-  "baseline_content_id": "ec4b2e89dbfc1299d9cb060b6fddf14fec5c8438787ec7c5d9b70c6af9d6a7b2",
+  "baseline_content_id": "46751ab9fbdf6690c2bbd4b81a1cfa303151c0fa2e4fa8f404398e5b67da3aa1",
   "files": {
-    "compiler-lock.json": "d61b4658d79586399b5fb7dac37810982a577f769cb4823ba592c9907d657b16",
-    "environment.json": "3b5223e3719a734972a28a9607717a8cf6dda3e30255e419c6cdbc312886d70c",
-    "evidence-lineage.ndjson": "6a36148d7d71c24c2a387fb0e2fdc1297c03a47b27b604d13fce405d570d8266",
-    "feature-links.ndjson": "3c81b8b945dc0e0e9aefe9d1ffe883601c1ce1da8c467de9b45599c6d9d18af4",
-    "handler-pairs.ndjson": "57634b8c93f3ea88faf766032536c3bbba70d44f9411128a852b975e458d02c1",
-    "obligation-results.ndjson": "42cd1596be3ab38d2f3b58d73a8d3194aa22b1157afe505c4fe85ec5e71d61a6",
-    "program-pairs.ndjson": "a341f90f5108b80366a3ad6a8c124973eb98739cf2bab148f30ea91d3c368dab",
-    "semantic-obligations.ndjson": "c9ff092a2d9b0e31f3f213ffab1717d9b55c02fd66cbeef8d3735786ab81313d",
-    "source-lock.json": "8289cc269beee8ce2655d9a9ac54ad92b15bb27fdde108e8a6636f944710fca9",
-    "summary.json": "24f7c6a60586a6d703f759f64465d3210020065fc2df9a02f2c4d88500f9f66b",
-    "summary.md": "8d2dc259d4cc9578940cba3ee1af58c4fdb6e700a253a4ac4d28b64711a87081",
+    "compiler-lock.json": "a55e55d34f15b4e66d4f16f45561fc66df67f4cfa20fd520626c5f1befb5750c",
+    "environment.json": "35d92805d73ca9e858fd5ea21cb662c94de5273305c8b750f6f3b9ea488354c8",
+    "evidence-lineage.ndjson": "8d52b3aca617ae6581dd0578d2e174be99009da45431b49d15ac14b9f2618481",
+    "execution-attempts.ndjson": "c83c8ab2c8e4727b54fe75b3b38fd58fb4d5b0bad09db1db34a96f11ef764a56",
+    "feature-links.ndjson": "375062268d65dfe5f11bf600968e0bd0504ba016665939246d8c7b35e778b249",
+    "handler-pairs.ndjson": "fa28f5f30f05a025d328eb395dbb506ab6f9b320c22caeb0ecb33b0adf5a7561",
+    "obligation-results.ndjson": "0ab234958e4da047666234fe7e475cea5afb8f46a353e1d0d3fa8c34f20ba0b4",
+    "program-artifacts.ndjson": "f49a0fa65af9608627db7d906fc3903c92407508788bc1d598fbdbb9adef65ca",
+    "program-pairs.ndjson": "17c7c43a5cf4445bc204dc897fa0c73e1a68fecb80cc9a23d80e8da54c2f090b",
+    "replays.ndjson": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "semantic-obligations.ndjson": "9258093b29e06f4e13ade2945f70099d89199b37fe1b84ae8f8dd19eed291591",
+    "source-lock.json": "106314fab6953126739598db091d6e7c643e133d4e3e061328eaceb6bdd71be0",
+    "summary.json": "c0ac2c06e43ca44b7d68d1858bd4879d1761dced3b3b8f9fbb8fe6075509432e",
+    "summary.md": "308e25ad6c266e4440c4a1dbc0a1247bb36d0632d6dc52db1c7b7fc39e60b7cf",
     "task-results.ndjson": "7a86683ee87dbb6ff47ba6aac4430481e2406fef508ed8d97914bc0e24ce40e2",
-    "validator-links.ndjson": "c5a724eb229e6fb994c95302c40f87881f9d044c188891da802acadb6b330b52"
+    "validator-links.ndjson": "e566511bc0a83ee0c76e17d8d85e6689015a12f0f18aa1c917ff588ca85ef171",
+    "witnesses.ndjson": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
-  "schema_version": 2
+  "schema_version": 3
 }

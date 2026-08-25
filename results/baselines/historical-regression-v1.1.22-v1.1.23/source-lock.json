@@ -4,19 +4,19 @@
   "old_new_dependency_lock_equal": true,
   "old_new_source_hash_equal": true,
   "package": "ak-equiv/historical-codegen-regression",
-  "schema_version": 2,
+  "schema_version": 3,
   "source_hash": "a129e73533b2d496e082bec20d555d95eb868decd3b356f7a9424a8187733091",
   "source_immutable": true,
   "source_provenance": {
-    "commit": "4e16a60ef5ccac2a0f869b8c62f13f2f973ee996",
+    "commit": "f7031dd39b95fc04b71ed9a20ca08c20e222fb7f",
     "dirty": false,
-    "identity": "ab8275c0a5aee99fe2f6fc0d3c77414af94b210961dcc018ab753217e04037a8",
+    "identity": "17f226016bbd4a6e321ccabd29c66c25bced64a1e36dd3de2f3effea505ccfe0",
     "identity_fields": {
       "adapter_hash": null,
       "canonical_repository_url": "https://github.com/Riley-Kilgore/ak-equiv-check",
       "dependency_lock_hash": "88ea28f7520d83d207bae89c30e2f6a2d27b337e36eb19b59a5ef01edefb820b",
       "package_subpath": "fixtures/historical-codegen-regression",
-      "revision": "4e16a60ef5ccac2a0f869b8c62f13f2f973ee996",
+      "revision": "f7031dd39b95fc04b71ed9a20ca08c20e222fb7f",
       "source_hash": "a129e73533b2d496e082bec20d555d95eb868decd3b356f7a9424a8187733091"
     },
     "kind": "git",

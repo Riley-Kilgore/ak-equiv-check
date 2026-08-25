@@ -19,31 +19,35 @@
 | `deduplicated_obligations` | 12 |
 | `equivalent_under_ledger_model_obligations` | 0 |
 | `equivalent_under_raw_model_obligations` | 12 |
+| `execution_attempt_records` | 15 |
 | `feature_link_records` | 3 |
 | `feature_rows` | 3 |
 | `handler_pair_records` | 6 |
 | `handler_pairs` | 6 |
 | `identical_program_pairs` | 0 |
 | `inconclusive_obligations` | 0 |
-| `obligation_result_records` | 36 |
-| `obligation_state_total` | 36 |
+| `obligation_result_records` | 24 |
+| `obligation_state_total` | 24 |
 | `off_ledger_differences` | 0 |
+| `program_artifact_records` | 6 |
 | `program_pair_records` | 3 |
 | `program_state_total` | 3 |
+| `replay_records` | 0 |
 | `reused_obligations` | 0 |
-| `semantic_obligation_records` | 36 |
+| `semantic_obligation_records` | 24 |
 | `shared_features_covered` | 0 |
 | `shared_features_missing` | 0 |
 | `unique_changed_program_pairs` | 3 |
-| `unique_ledger_obligations` | 24 |
+| `unique_ledger_obligations` | 12 |
 | `unique_program_pairs` | 3 |
 | `unique_raw_obligations` | 12 |
 | `unreplayed_falsifications` | 0 |
-| `unsupported_obligations` | 12 |
+| `unsupported_obligations` | 0 |
 | `validator_handlers` | 6 |
 | `validator_link_records` | 6 |
 | `validator_records_new` | 6 |
 | `validator_records_old` | 6 |
+| `witness_records` | 0 |
 
 ## Remaining gaps
 

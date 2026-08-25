@@ -1,15 +1,15 @@
 {
-  "artifact_id": 9532311495,
-  "artifact_sha256": "bed0be801d614c3499eb99616870313ad4ab57d24478ce679114805cd45dc3fd",
+  "artifact_id": 9548060018,
+  "artifact_sha256": "26ece4f9fbb47d389622c067d89652045e9c93529245f7190c0b6fe11521e47c",
   "attestation_kind": "public_ci_reproduction",
-  "baseline_content_id": "ec4b2e89dbfc1299d9cb060b6fddf14fec5c8438787ec7c5d9b70c6af9d6a7b2",
-  "capture_command": "python scripts/capture_historical_baseline.py --profile historical-equivalent-v1.1.21-v1.1.22 --run a63cb93c767d4c47c889dc500c9a83450320fe5dbbc8323798277be607fa3a3a --output results/baselines/historical-equivalent-v1.1.21-v1.1.22",
-  "github_run_id": 32759091297,
-  "job_id": 97533349976,
+  "baseline_content_id": "46751ab9fbdf6690c2bbd4b81a1cfa303151c0fa2e4fa8f404398e5b67da3aa1",
+  "capture_command": "python scripts/capture_historical_baseline.py --profile historical-equivalent-v1.1.21-v1.1.22 --run c1cd3420a84ae46d15ea9ab938152cabfa9a3b5f8593e7aadbedff1a6c802058 --output results/baselines/historical-equivalent-v1.1.21-v1.1.22",
+  "github_run_id": 32805027753,
+  "job_id": 97673372046,
   "platform": "ubuntu-24.04",
   "profile_id": "historical-equivalent-v1.1.21-v1.1.22",
-  "repository_commit": "4e16a60ef5ccac2a0f869b8c62f13f2f973ee996",
-  "schema_version": 2,
+  "repository_commit": "f7031dd39b95fc04b71ed9a20ca08c20e222fb7f",
+  "schema_version": 3,
   "verification_result": "verified",
-  "workflow_revision": "4e16a60ef5ccac2a0f869b8c62f13f2f973ee996"
+  "workflow_revision": "f7031dd39b95fc04b71ed9a20ca08c20e222fb7f"
 }

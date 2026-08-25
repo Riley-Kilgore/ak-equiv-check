@@ -1,7 +1,8 @@
 {
   "blaster_configuration": {
     "cardano_ledger_api_blaster_revision": "577e3eb03b5be09354cfdb1c0d0c12e9e16541a0",
-    "checker_configuration_id": "fe24a655b674724d40083682824b22a5832fa6735a41c1f25ed45f51b8715558",
+    "checker_configuration_id": "87a05fcc43b7b4f2b43574165c4bf9a2f5752bbe606372a451cfd149400077e6",
+    "checker_implementation_id": "22d4a6b1f6996363c6ee065ac22468cc09eaf1c13ff5fc37a5f11ddf713ea142",
     "evaluator": {
       "backend_kind": "aiken",
       "binary_sha256": "748b9d45785fbded901ed87475072b6d20ee259bb4588c72428c12a19e8902d3",
@@ -18,11 +19,12 @@
       "version": "v1.1.23"
     },
     "fuel_semantics": "maximum CEK transitions per concrete modeled input",
-    "generated_lean_schema_version": "equiv-generated-lean/v2",
+    "generated_lean_schema_version": "equiv-generated-lean/v3",
     "lean_blaster_revision": "402f6d22c1fc42e6e26255faac77e15b2450e4ab",
     "lean_version": "4.24.0",
     "plutus_core_blaster_revision": "4ef48606303c45225d3ed2e2a87fc50280a763b7",
     "random_seed": 1,
+    "result_protocol": "EQUIV_RESULT_V3",
     "secondary_evaluator": null,
     "semantic_runtime_step_bound": 10000,
     "solver": "z3",
@@ -42,16 +44,18 @@
     },
     "uplc_importer_revision": "4ef48606303c45225d3ed2e2a87fc50280a763b7",
     "uplc_preparer_revision": "4ef48606303c45225d3ed2e2a87fc50280a763b7",
+    "witness_protocol": "EQUIV_WITNESS_V3",
     "z3_version": "4.15.2"
   },
   "checker_configuration": {
     "feature_contract_sha256": null,
     "mode": "package",
     "require_script_difference": true,
-    "runner_sha256": "fddb87c613a8ccdb7390df5477c6ba5e699217415f9f3bdc83d1b09e821dec2d",
+    "runner_sha256": "22d4a6b1f6996363c6ee065ac22468cc09eaf1c13ff5fc37a5f11ddf713ea142",
     "schema_version": 2,
     "semantic_contract": "forall raw_arguments, observe(old_program(raw_arguments)) = observe(new_program(raw_arguments))"
   },
+  "checker_implementation_id": "22d4a6b1f6996363c6ee065ac22468cc09eaf1c13ff5fc37a5f11ddf713ea142",
   "replay_trust": [
     {
       "distinct_uplc_implementation": false,
@@ -60,5 +64,5 @@
       "separately_pinned": true
     }
   ],
-  "schema_version": 2
+  "schema_version": 3
 }

@@ -4,19 +4,19 @@
   "old_new_dependency_lock_equal": true,
   "old_new_source_hash_equal": true,
   "package": "ak-equiv/historical-codegen-equivalent",
-  "schema_version": 2,
+  "schema_version": 3,
   "source_hash": "91be68619b8a34d8461620b60082b3e6f1fb81c61a1bbff62c871782bc31cacc",
   "source_immutable": true,
   "source_provenance": {
-    "commit": "4e16a60ef5ccac2a0f869b8c62f13f2f973ee996",
+    "commit": "f7031dd39b95fc04b71ed9a20ca08c20e222fb7f",
     "dirty": false,
-    "identity": "7f6eed4e01d87b64c7293fc2c493084895ebc0ea0c9b3342354d1c02976fb943",
+    "identity": "4ad1894096eb9b5d22ccc34118bf94db2b79e996bd1df0229b9013078040d04d",
     "identity_fields": {
       "adapter_hash": null,
       "canonical_repository_url": "https://github.com/Riley-Kilgore/ak-equiv-check",
       "dependency_lock_hash": "88ea28f7520d83d207bae89c30e2f6a2d27b337e36eb19b59a5ef01edefb820b",
       "package_subpath": "fixtures/historical-codegen-equivalent",
-      "revision": "4e16a60ef5ccac2a0f869b8c62f13f2f973ee996",
+      "revision": "f7031dd39b95fc04b71ed9a20ca08c20e222fb7f",
       "source_hash": "91be68619b8a34d8461620b60082b3e6f1fb81c61a1bbff62c871782bc31cacc"
     },
     "kind": "git",
