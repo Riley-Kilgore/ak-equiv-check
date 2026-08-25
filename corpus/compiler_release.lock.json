@@ -28,6 +28,19 @@
             "rustup_active_toolchain": "stable-aarch64-apple-darwin (default)",
             "target_triple": "aarch64-apple-darwin"
           }
+        },
+        "linux-x86_64-x86_64-unknown-linux-gnu": {
+          "platform": "linux",
+          "architecture": "x86_64",
+          "target_triple": "x86_64-unknown-linux-gnu",
+          "binary_sha256": "1cd4964cd3af7821d3b8039768e2d6512036911e631edd8ba73a1b9db694ecf4",
+          "compiler_artifact_id": "d4bc533c728c196634da4fb5ae9c6db414f87d29840f3c6185c7c7b5fb699226",
+          "toolchain": {
+            "cargo_version": "cargo 1.97.1 (c980f4866 2026-06-30)",
+            "rustc_verbose": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6",
+            "rustup_active_toolchain": "stable-x86_64-unknown-linux-gnu (default)",
+            "target_triple": "x86_64-unknown-linux-gnu"
+          }
         }
       }
     },
@@ -87,6 +100,19 @@
             "rustc_verbose": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: aarch64-apple-darwin\nrelease: 1.97.1\nLLVM version: 22.1.6",
             "rustup_active_toolchain": "stable-aarch64-apple-darwin (default)",
             "target_triple": "aarch64-apple-darwin"
+          }
+        },
+        "linux-x86_64-x86_64-unknown-linux-gnu": {
+          "platform": "linux",
+          "architecture": "x86_64",
+          "target_triple": "x86_64-unknown-linux-gnu",
+          "binary_sha256": "0bd6345741b66102f181eb4474d7c1ec506af6590d9f7d54820230c75f99dd9d",
+          "compiler_artifact_id": "607889d54c45ef7e1f75304c039be8f5a47a584a7b4871a3460b3c7979ccf138",
+          "toolchain": {
+            "cargo_version": "cargo 1.97.1 (c980f4866 2026-06-30)",
+            "rustc_verbose": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6",
+            "rustup_active_toolchain": "stable-x86_64-unknown-linux-gnu (default)",
+            "target_triple": "x86_64-unknown-linux-gnu"
           }
         }
       }

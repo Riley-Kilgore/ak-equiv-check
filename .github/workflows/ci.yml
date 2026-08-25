@@ -439,10 +439,6 @@ jobs:
         run: |
           uv run equiv-checker compiler build-release --aiken-source "$RUNNER_TEMP/aiken-v1.1.21" --ref v1.1.21 --label base-changed --output ../.ak-equiv/compilers/base-changed
           uv run equiv-checker compiler build-local --aiken-source "$RUNNER_TEMP/aiken-v1.1.22" --label candidate-changed --output ../.ak-equiv/compilers/candidate-changed
-      - name: Report locked Linux v1.1.21 artifact identity
-        run: |
-          MANIFEST="$(base64 -w 0 .ak-equiv/compilers/base-changed/compiler.json)"
-          echo "::notice file=corpus/compiler_release.lock.json,line=1,title=linux-v1.1.21-manifest::$MANIFEST"
       - name: Run changed output through global candidate planning
         working-directory: tool
         run: |
@@ -538,10 +534,6 @@ jobs:
             --aiken-source "$RUNNER_TEMP/aiken-v1.1.23" \
             --label candidate \
             --output ../.ak-equiv/compilers/candidate
-      - name: Report locked Linux v1.1.23 artifact identity
-        run: |
-          MANIFEST="$(base64 -w 0 .ak-equiv/compilers/base/compiler.json)"
-          echo "::notice file=corpus/compiler_release.lock.json,line=1,title=linux-v1.1.23-manifest::$MANIFEST"
       - name: Run and verify the complete strict candidate gate
         run: |
           mkdir -p work
