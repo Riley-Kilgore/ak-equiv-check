@@ -565,9 +565,9 @@ jobs:
           cp "$ATTESTATION_BUNDLE" work/candidate-attestation.json
           if ! VERIFICATION="$(
             uv run --directory tool equiv-checker candidate verify \
-              work/candidate-bundle.tar.gz \
+              ../work/candidate-bundle.tar.gz \
               --repository "$GITHUB_REPOSITORY" \
-              --attestation-bundle work/candidate-attestation.json \
+              --attestation-bundle ../work/candidate-attestation.json \
               2>&1
           )"; then
             printf '%s\n' "$VERIFICATION" >&2
