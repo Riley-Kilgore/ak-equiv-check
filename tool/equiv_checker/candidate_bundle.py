@@ -277,10 +277,9 @@ def expected_task_classification(
                 or result.get("primary_exit_code") != 0
             ):
                 return f"{side}_build_failed"
-            if (
-                result.get("uplc_extraction_timed_out")
-                or result.get("uplc_extraction_exit_code") != 0
-            ):
+            if result.get("uplc_extraction_timed_out") or result.get(
+                "uplc_extraction_exit_code"
+            ) not in {None, 0}:
                 return f"{side}_uplc_extraction_failed"
             if result.get("blueprint_present") is False:
                 return f"{side}_blueprint_missing"

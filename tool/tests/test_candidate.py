@@ -133,7 +133,7 @@ class CandidateGateTests(unittest.TestCase):
         successful_build = {
             "primary_exit_code": 0,
             "build_timed_out": False,
-            "uplc_extraction_exit_code": 0,
+            "uplc_extraction_exit_code": None,
             "uplc_extraction_timed_out": False,
             "blueprint_present": True,
             "blueprint_malformed": False,
@@ -179,6 +179,27 @@ class CandidateGateTests(unittest.TestCase):
                     expected_task_classification(task, {}),
                     expected,
                 )
+        task = _task_record(
+            {
+                "task_id": "feature-sentinel",
+                "source_id": "feature-sentinel",
+                "lane": "equivalence",
+                "classification": "discovery_completed",
+                "source_hash_before": "a" * 64,
+                "source_hash_after": "a" * 64,
+                "dependency_graph_before": "b" * 64,
+                "dependency_graph_after": "b" * 64,
+                "source_immutable": True,
+                "old_result": successful_build,
+                "new_result": successful_build,
+            },
+            program_pair_ids=[],
+            logical_obligation_ids=[],
+        )
+        self.assertEqual(
+            expected_task_classification(task, {}),
+            "not_applicable",
+        )
 
     def test_evidence_identity_rejects_policy_inputs(self) -> None:
         neutral_inputs = {
