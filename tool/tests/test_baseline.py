@@ -432,9 +432,13 @@ class BaselineVerificationTests(unittest.TestCase):
             "attempt_sequence": 1,
         }
         result["evidence_result_id"] = module._obligation_result_identity(result)
+        previous_evidence_id = result["evidence_result_id"]
         records = {
             "replays.ndjson": [replay],
             "obligation-results.ndjson": [result],
+            "validator-links.ndjson": [
+                {"evidence_result_ids": [previous_evidence_id]}
+            ],
         }
 
         module._make_identity_bound_records_portable(records)
@@ -459,6 +463,10 @@ class BaselineVerificationTests(unittest.TestCase):
         self.assertEqual(
             portable_result["evidence_result_id"],
             module._obligation_result_identity(portable_result),
+        )
+        self.assertEqual(
+            records["validator-links.ndjson"][0]["evidence_result_ids"],
+            [portable_result["evidence_result_id"]],
         )
 
     def test_legacy_v2_baseline_is_explicitly_rejected(self) -> None:

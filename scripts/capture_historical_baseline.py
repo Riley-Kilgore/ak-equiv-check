@@ -129,11 +129,21 @@ def _make_identity_bound_records_portable(
         portable_replays.append(portable)
     record_files["replays.ndjson"] = portable_replays
 
+    evidence_id_changes: dict[str, str] = {}
     for result in record_files["obligation-results.ndjson"]:
+        previous_id = str(result["evidence_result_id"])
         replay_reference = result.get("replay_reference")
         if replay_reference in replay_id_changes:
             result["replay_reference"] = replay_id_changes[replay_reference]
-        result["evidence_result_id"] = _obligation_result_identity(result)
+        current_id = _obligation_result_identity(result)
+        result["evidence_result_id"] = current_id
+        evidence_id_changes[previous_id] = current_id
+
+    for link in record_files["validator-links.ndjson"]:
+        link["evidence_result_ids"] = sorted(
+            evidence_id_changes[evidence_id]
+            for evidence_id in link["evidence_result_ids"]
+        )
 
 
 def _manifest_record(path: Path) -> dict[str, Any]:

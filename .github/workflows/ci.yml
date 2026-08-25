@@ -563,14 +563,25 @@ jobs:
         run: |
           set -o pipefail
           cp "$ATTESTATION_BUNDLE" work/candidate-attestation.json
-          uv run --directory tool equiv-checker candidate verify \
-            work/candidate-bundle.tar.gz \
-            --repository "$GITHUB_REPOSITORY" \
-            --attestation-bundle work/candidate-attestation.json \
-            | tee work/candidate-release-verification.json
-          test "$(jq -r .publishable work/candidate-release-verification.json)" = true
+          if ! VERIFICATION="$(
+            uv run --directory tool equiv-checker candidate verify \
+              work/candidate-bundle.tar.gz \
+              --repository "$GITHUB_REPOSITORY" \
+              --attestation-bundle work/candidate-attestation.json \
+              2>&1
+          )"; then
+            printf '%s\n' "$VERIFICATION" >&2
+            echo "::error title=Candidate provenance verification failed::${VERIFICATION//$'\n'/ }"
+            exit 1
+          fi
+          printf '%s\n' "$VERIFICATION" | tee work/candidate-release-verification.json
+          if [ "$(jq -r .publishable work/candidate-release-verification.json)" != true ]; then
+            echo "::error title=Candidate is not publishable::Signed verification returned publishable=false"
+            exit 1
+          fi
       - name: Upload verified candidate evidence
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        if: always()
         with:
           name: candidate-gate-full-${{ github.run_id }}
           path: |
