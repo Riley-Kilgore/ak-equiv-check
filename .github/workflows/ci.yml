@@ -552,16 +552,21 @@ jobs:
           cp -a "$BUNDLE" work/candidate-bundle
           tar -czf work/candidate-bundle.tar.gz -C work/candidate-bundle .
       - name: Attest the candidate evidence archive
+        id: candidate-attestation
         uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
         with:
           subject-path: work/candidate-bundle.tar.gz
       - name: Verify signed candidate evidence and release decision
         env:
           GH_TOKEN: ${{ github.token }}
+          ATTESTATION_BUNDLE: ${{ steps.candidate-attestation.outputs.bundle-path }}
         run: |
+          set -o pipefail
+          cp "$ATTESTATION_BUNDLE" work/candidate-attestation.json
           uv run --directory tool equiv-checker candidate verify \
             work/candidate-bundle.tar.gz \
             --repository "$GITHUB_REPOSITORY" \
+            --attestation-bundle work/candidate-attestation.json \
             | tee work/candidate-release-verification.json
           test "$(jq -r .publishable work/candidate-release-verification.json)" = true
       - name: Upload verified candidate evidence
@@ -572,6 +577,7 @@ jobs:
             work/candidate-gate-result.json
             work/candidate-release-verification.json
             work/candidate-bundle/
+            work/candidate-attestation.json
             work/candidate-bundle.tar.gz
             .ak-equiv/compilers/base/compiler.json
             .ak-equiv/compilers/candidate/compiler.json

@@ -402,6 +402,65 @@ class BaselineVerificationTests(unittest.TestCase):
             ),
         )
 
+    def test_capture_rebinds_portable_replay_and_result_identities(self) -> None:
+        script = Path(__file__).resolve().parents[2] / "scripts" / "capture_historical_baseline.py"
+        spec = importlib.util.spec_from_file_location("capture_historical_baseline", script)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        replay = {
+            "command": [str(module.ROOT / "work" / "evaluator")],
+            "confirmed": True,
+        }
+        replay["replay_id"] = module._identity("counterexample_replay", replay)
+        previous_replay_id = replay["replay_id"]
+        result = {
+            "logical_obligation_id": "1" * 64,
+            "obligation_attempt_id": "2" * 64,
+            "execution_attempt_id": "3" * 64,
+            "checker_configuration_id": "4" * 64,
+            "checker_implementation_id": "5" * 64,
+            "program_pair_id": "6" * 64,
+            "semantic_model_id": "7" * 64,
+            "obligation_kind": "observational_equivalence",
+            "status": "falsified",
+            "generated_source_sha256": "8" * 64,
+            "solver_status": "falsified",
+            "witness_reference": "9" * 64,
+            "replay_reference": previous_replay_id,
+            "relevant_solver_options": {"solver": "z3"},
+            "attempt_sequence": 1,
+        }
+        result["evidence_result_id"] = module._obligation_result_identity(result)
+        records = {
+            "replays.ndjson": [replay],
+            "obligation-results.ndjson": [result],
+        }
+
+        module._make_identity_bound_records_portable(records)
+
+        portable_replay = records["replays.ndjson"][0]
+        portable_result = records["obligation-results.ndjson"][0]
+        self.assertNotEqual(previous_replay_id, portable_replay["replay_id"])
+        self.assertNotIn(str(module.ROOT), json.dumps(portable_replay))
+        replay_payload = {
+            key: value
+            for key, value in portable_replay.items()
+            if key != "replay_id"
+        }
+        self.assertEqual(
+            portable_replay["replay_id"],
+            module._identity("counterexample_replay", replay_payload),
+        )
+        self.assertEqual(
+            portable_result["replay_reference"],
+            portable_replay["replay_id"],
+        )
+        self.assertEqual(
+            portable_result["evidence_result_id"],
+            module._obligation_result_identity(portable_result),
+        )
+
     def test_legacy_v2_baseline_is_explicitly_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

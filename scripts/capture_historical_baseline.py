@@ -92,6 +92,50 @@ def _portable(value: Any) -> Any:
     return result
 
 
+def _obligation_result_identity(record: dict[str, Any]) -> str:
+    return _identity(
+        "obligation_result",
+        {
+            "logical_obligation_id": record["logical_obligation_id"],
+            "obligation_attempt_id": record["obligation_attempt_id"],
+            "execution_attempt_id": record["execution_attempt_id"],
+            "checker_configuration_id": record["checker_configuration_id"],
+            "checker_implementation_id": record["checker_implementation_id"],
+            "program_pair_id": record["program_pair_id"],
+            "semantic_model_id": record["semantic_model_id"],
+            "obligation_kind": record["obligation_kind"],
+            "status": record["status"],
+            "generated_source_sha256": record.get("generated_source_sha256"),
+            "solver_status": record.get("solver_status"),
+            "witness_reference": record.get("witness_reference"),
+            "replay_reference": record.get("replay_reference"),
+            "relevant_solver_options": record["relevant_solver_options"],
+            "attempt_sequence": int(record["attempt_sequence"]),
+        },
+    )
+
+
+def _make_identity_bound_records_portable(
+    record_files: dict[str, list[dict[str, Any]]],
+) -> None:
+    replay_id_changes: dict[str, str] = {}
+    portable_replays: list[dict[str, Any]] = []
+    for replay in record_files["replays.ndjson"]:
+        portable = _portable(replay)
+        previous_id = str(portable.pop("replay_id"))
+        current_id = _identity("counterexample_replay", portable)
+        portable["replay_id"] = current_id
+        replay_id_changes[previous_id] = current_id
+        portable_replays.append(portable)
+    record_files["replays.ndjson"] = portable_replays
+
+    for result in record_files["obligation-results.ndjson"]:
+        replay_reference = result.get("replay_reference")
+        if replay_reference in replay_id_changes:
+            result["replay_reference"] = replay_id_changes[replay_reference]
+        result["evidence_result_id"] = _obligation_result_identity(result)
+
+
 def _manifest_record(path: Path) -> dict[str, Any]:
     manifest = _read(path)
     return {
@@ -416,6 +460,7 @@ def capture(
         "validator-links.ndjson": _records(run, "validator-links.json"),
         "feature-links.ndjson": _records(run, "feature-links.json"),
     }
+    _make_identity_bound_records_portable(record_files)
     _bind_historical_feature_links(profile, record_files, pair_results)
     obligation_results = record_files["obligation-results.ndjson"]
     record_files["evidence-lineage.ndjson"] = [
