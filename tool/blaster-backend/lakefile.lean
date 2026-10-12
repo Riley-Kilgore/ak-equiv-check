@@ -6,7 +6,7 @@ package «EquivBlasterBackend» where
   moreLeanArgs := #["--threads=4"]
 
 require Blaster from git
-  "https://github.com/input-output-hk/Lean-blaster" @ "402f6d22c1fc42e6e26255faac77e15b2450e4ab"
+  "https://github.com/input-output-hk/Lean-blaster" @ "ab82a3cb647cbdecc198202244622554e2464e4d"
 require PlutusCore from git
   "https://github.com/input-output-hk/PlutusCoreBlaster" @ "4ef48606303c45225d3ed2e2a87fc50280a763b7"
 require CardanoLedgerApi from git
